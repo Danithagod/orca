@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@kilocode/kilo-i18n",
+  "name": "@orca/i18n",
   "version": "7.0.51",
   "type": "module",
   "license": "MIT",

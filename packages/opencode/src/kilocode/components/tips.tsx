@@ -36,8 +36,11 @@ export function Tips(props: { tip?: string }) {
 
   return (
     <box flexDirection="row" maxWidth="100%">
-      <text flexShrink={0} style={{ fg: theme.warning }}>
-        ● Tip{" "}
+      <text flexShrink={0} style={{ fg: theme.accent }}>
+        ◉{" "}
+      </text>
+      <text flexShrink={0} style={{ fg: theme.textMuted }}>
+        Tip{" "}
       </text>
       <text flexShrink={1}>
         <For each={parts}>
@@ -48,7 +51,7 @@ export function Tips(props: { tip?: string }) {
   )
 }
 
-// Curated tips for Kilo CLI
+// Curated tips for Orca CLI
 const TIPS = [
   "Type {highlight}@{/highlight} followed by a filename to fuzzy search and attach files",
   "Start a message with {highlight}!{/highlight} to run shell commands directly (e.g., {highlight}!ls -la{/highlight})",
@@ -80,42 +83,42 @@ const TIPS = [
   "Switch to {highlight}Plan{/highlight} agent to get suggestions without making actual changes",
   "Use {highlight}@agent-name{/highlight} in prompts to invoke specialized subagents",
   "Press {highlight}Ctrl+X Right/Left{/highlight} to cycle through parent and child sessions",
-  "Create {highlight}kilo.json{/highlight} for server settings and {highlight}tui.json{/highlight} for TUI settings",
-  "Place TUI settings in {highlight}~/.config/kilo/tui.json{/highlight} for global config",
+  "Create {highlight}orca.json{/highlight} for server settings and {highlight}tui.json{/highlight} for TUI settings",
+  "Place TUI settings in {highlight}~/.config/orca/tui.json{/highlight} for global config",
   "Add {highlight}$schema{/highlight} to your config for autocomplete in your editor",
   "Configure {highlight}model{/highlight} in config to set your default model",
   "Override any keybind in {highlight}tui.json{/highlight} via the {highlight}keybinds{/highlight} section",
   "Set any keybind to {highlight}none{/highlight} to disable it completely",
   "Configure local or remote MCP servers in the {highlight}mcp{/highlight} config section",
-  "Kilo auto-handles OAuth for remote MCP servers requiring auth",
-  "Add {highlight}.md{/highlight} files to {highlight}.kilo/command/{/highlight} to define reusable custom prompts",
+  "Orca auto-handles OAuth for remote MCP servers requiring auth",
+  "Add {highlight}.md{/highlight} files to {highlight}.orca/command/{/highlight} to define reusable custom prompts",
   "Use {highlight}$ARGUMENTS{/highlight}, {highlight}$1{/highlight}, {highlight}$2{/highlight} in custom commands for dynamic input",
   "Use backticks in commands to inject shell output (e.g., {highlight}`git status`{/highlight})",
-  "Add {highlight}.md{/highlight} files to {highlight}.kilo/agent/{/highlight} for specialized AI personas",
+  "Add {highlight}.md{/highlight} files to {highlight}.orca/agent/{/highlight} for specialized AI personas",
   "Configure per-agent permissions for {highlight}edit{/highlight}, {highlight}bash{/highlight}, and {highlight}webfetch{/highlight} tools",
   'Use patterns like {highlight}"git *": "allow"{/highlight} for granular bash permissions',
   'Set {highlight}"rm -rf *": "deny"{/highlight} to block destructive commands',
   'Configure {highlight}"git push": "ask"{/highlight} to require approval before pushing',
-  "Kilo auto-formats files using prettier, gofmt, ruff, and more",
+  "Orca auto-formats files using prettier, gofmt, ruff, and more",
   'Set {highlight}"formatter": false{/highlight} in config to disable all auto-formatting',
   "Define custom formatter commands with file extensions in config",
-  "Kilo uses LSP servers for intelligent code analysis",
-  "Create {highlight}.ts{/highlight} files in {highlight}.kilo/tools/{/highlight} to define new LLM tools",
+  "Orca uses LSP servers for intelligent code analysis",
+  "Create {highlight}.ts{/highlight} files in {highlight}.orca/tools/{/highlight} to define new LLM tools",
   "Tool definitions can invoke scripts written in Python, Go, etc",
-  "Add {highlight}.ts{/highlight} files to {highlight}.kilo/plugin/{/highlight} for event hooks",
+  "Add {highlight}.ts{/highlight} files to {highlight}.orca/plugin/{/highlight} for event hooks",
   "Use plugins to send OS notifications when sessions complete",
-  "Create a plugin to prevent Kilo from reading sensitive files",
-  "Use {highlight}kilo run{/highlight} for non-interactive scripting",
-  "Use {highlight}kilo --continue{/highlight} to resume the last session",
-  "Use {highlight}kilo run -f file.ts{/highlight} to attach files via CLI",
+  "Create a plugin to prevent Orca from reading sensitive files",
+  "Use {highlight}orca run{/highlight} for non-interactive scripting",
+  "Use {highlight}orca --continue{/highlight} to resume the last session",
+  "Use {highlight}orca run -f file.ts{/highlight} to attach files via CLI",
   "Use {highlight}--format json{/highlight} for machine-readable output in scripts",
-  "Run {highlight}kilo serve{/highlight} for headless API access to Kilo",
-  "Use {highlight}kilo run --attach{/highlight} to connect to a running server",
-  "Run {highlight}kilo upgrade{/highlight} to update to the latest version",
-  "Run {highlight}kilo auth list{/highlight} to see all configured providers",
-  "Run {highlight}kilo agent create{/highlight} for guided agent creation",
+  "Run {highlight}orca serve{/highlight} for headless API access to Orca",
+  "Use {highlight}orca run --attach{/highlight} to connect to a running server",
+  "Run {highlight}orca upgrade{/highlight} to update to the latest version",
+  "Run {highlight}orca auth list{/highlight} to see all configured providers",
+  "Run {highlight}orca agent create{/highlight} for guided agent creation",
   'Use {highlight}"theme": "system"{/highlight} to match your terminal\'s colors',
-  "Create JSON theme files in {highlight}.kilo/themes/{/highlight} directory",
+  "Create JSON theme files in {highlight}.orca/themes/{/highlight} directory",
   "Themes support dark/light variants for both modes",
   "Reference ANSI colors 0-255 in custom themes",
   "Use {highlight}{env:VAR_NAME}{/highlight} syntax to reference environment variables in config",
@@ -131,7 +134,7 @@ const TIPS = [
   "Run {highlight}/unshare{/highlight} to remove a session from public access",
   "Permission {highlight}doom_loop{/highlight} prevents infinite tool call loops",
   "Permission {highlight}external_directory{/highlight} protects files outside project",
-  "Run {highlight}kilo debug config{/highlight} to troubleshoot configuration",
+  "Run {highlight}orca debug config{/highlight} to troubleshoot configuration",
   "Use {highlight}--print-logs{/highlight} flag to see detailed logs in stderr",
   "Press {highlight}Ctrl+X G{/highlight} or {highlight}/timeline{/highlight} to jump to specific messages",
   "Press {highlight}Ctrl+X S{/highlight} or {highlight}/status{/highlight} to see config paths, MCP servers, and system info",

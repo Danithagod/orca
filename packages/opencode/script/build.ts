@@ -176,7 +176,7 @@ for (const item of targets) {
   const bunfsRoot = item.os === "win32" ? "B:/~BUN/root/" : "/$bunfs/root/"
   const workerRelativePath = path.relative(dir, parserWorker).replaceAll("\\", "/")
 
-  await Bun.build({
+  const result = await Bun.build({
     conditions: ["browser"],
     tsconfig: "./tsconfig.json",
     plugins: [solidPlugin],
@@ -187,7 +187,7 @@ for (const item of targets) {
       autoloadTsconfig: true,
       autoloadPackageJson: true,
       target: name.replace(pkg.name, "bun") as any,
-      outfile: `dist/${name}/bin/kilo`, // kilocode_change
+      outfile: `dist/${name}/bin/kilo${item.os === "win32" ? ".exe" : ""}`, // kilocode_change
       execArgv: [`--user-agent=kilo/${Script.version}`, "--use-system-ca", "--"], // kilocode_change
       windows: {},
     },
@@ -201,6 +201,14 @@ for (const item of targets) {
       KILO_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
     },
   })
+
+  if (!result.success) {
+    console.error(`build failed for ${name}`)
+    for (const message of result.logs) {
+      console.error(message)
+    }
+    process.exit(1)
+  }
 
   // kilocode_change start - fix Nix-specific ELF interpreter paths for Linux binaries
   if (item.os === "linux") {

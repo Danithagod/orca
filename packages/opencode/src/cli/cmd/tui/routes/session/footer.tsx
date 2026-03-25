@@ -25,7 +25,6 @@ export function Footer() {
   })
 
   onMount(() => {
-    // Track all timeouts to ensure proper cleanup
     const timeouts: ReturnType<typeof setTimeout>[] = []
 
     function tick() {
@@ -51,11 +50,13 @@ export function Footer() {
 
   return (
     <box flexDirection="row" justifyContent="space-between" gap={1} flexShrink={0}>
+      <text fg={theme.primary}>Orca</text>
+      <text fg={theme.textMuted}>│</text>
       <text fg={theme.textMuted}>{directory()}</text>
       <box gap={2} flexDirection="row" flexShrink={0}>
         <Switch>
           <Match when={store.welcome}>
-            <text fg={theme.text}>
+            <text fg={theme.accent}>
               Get started <span style={{ fg: theme.textMuted }}>/connect</span>
             </text>
           </Match>
@@ -67,16 +68,16 @@ export function Footer() {
               </text>
             </Show>
             <text fg={theme.text}>
-              <span style={{ fg: lsp().length > 0 ? theme.success : theme.textMuted }}>•</span> {lsp().length} LSP
+              <span style={{ fg: lsp().length > 0 ? theme.success : theme.textMuted }}>●</span> {lsp().length} LSP
             </text>
             <Show when={mcp()}>
               <text fg={theme.text}>
                 <Switch>
                   <Match when={mcpError()}>
-                    <span style={{ fg: theme.error }}>⊙ </span>
+                    <span style={{ fg: theme.error }}>◉ </span>
                   </Match>
                   <Match when={true}>
-                    <span style={{ fg: theme.success }}>⊙ </span>
+                    <span style={{ fg: theme.success }}>◉ </span>
                   </Match>
                 </Switch>
                 {mcp()} MCP

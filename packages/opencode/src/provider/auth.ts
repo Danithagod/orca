@@ -8,6 +8,7 @@ import { NamedError } from "@opencode-ai/util/error"
 import { Auth } from "@/auth"
 import { Telemetry } from "@kilocode/kilo-telemetry" // kilocode_change
 import { ModelCache } from "./model-cache" // kilocode_change
+import { StartupTrace } from "@/startup/trace"
 
 export namespace ProviderAuth {
   const state = Instance.state(async () => {
@@ -31,15 +32,19 @@ export namespace ProviderAuth {
   export type Method = z.infer<typeof Method>
 
   export async function methods() {
-    const s = await state().then((x) => x.methods)
-    return mapValues(s, (x) =>
-      x.methods.map(
-        (y): Method => ({
-          type: y.type,
-          label: y.label,
-        }),
-      ),
-    )
+    return StartupTrace.time("provider.auth.methods", {
+      fn: async () => {
+        const s = await state().then((x) => x.methods)
+        return mapValues(s, (x) =>
+          x.methods.map(
+            (y): Method => ({
+              type: y.type,
+              label: y.label,
+            }),
+          ),
+        )
+      },
+    })
   }
 
   export const Authorization = z

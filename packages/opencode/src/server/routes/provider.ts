@@ -8,6 +8,7 @@ import { ProviderAuth } from "../../provider/auth"
 import { mapValues, pickBy } from "remeda" // kilocode_change
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { StartupTrace } from "@/startup/trace"
 
 export const ProviderRoutes = lazy(() =>
   new Hono()
@@ -35,35 +36,39 @@ export const ProviderRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const config = await Config.get()
-        const disabled = new Set(config.disabled_providers ?? [])
-        const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
+        const result = await StartupTrace.time("provider.list", {
+          fn: async () => {
+            const config = await Config.get()
+            const disabled = new Set(config.disabled_providers ?? [])
+            const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
 
-        const allProviders = await ModelsDev.get()
-        const filteredProviders: Record<string, (typeof allProviders)[string]> = {}
-        for (const [key, value] of Object.entries(allProviders)) {
-          if ((enabled ? enabled.has(key) : true) && !disabled.has(key)) {
-            filteredProviders[key] = value
-          }
-        }
+            const allProviders = await ModelsDev.get()
+            const filteredProviders: Record<string, (typeof allProviders)[string]> = {}
+            for (const [key, value] of Object.entries(allProviders)) {
+              if ((enabled ? enabled.has(key) : true) && !disabled.has(key)) {
+                filteredProviders[key] = value
+              }
+            }
 
-        const connected = await Provider.list()
-        const providers = Object.assign(
-          mapValues(filteredProviders, (x) => Provider.fromModelsDevProvider(x)),
-          connected,
-        )
-        // kilocode_change start: Filter out providers with no models to prevent crashes
-        const validProviders = pickBy(providers, (item) => Object.keys(item.models).length > 0)
+            const connected = await Provider.list()
+            const providers = Object.assign(
+              mapValues(filteredProviders, (x) => Provider.fromModelsDevProvider(x)),
+              connected,
+            )
+            const validProviders = pickBy(providers, (item) => Object.keys(item.models).length > 0)
 
-        return c.json({
-          all: Object.values(validProviders),
-          default: mapValues(validProviders, (item) => {
-            const sorted = Provider.sort(Object.values(item.models))
-            return sorted[0]?.id ?? ""
-          }),
-          connected: Object.keys(connected),
+            return {
+              all: Object.values(validProviders),
+              default: mapValues(validProviders, (item) => {
+                const sorted = Provider.sort(Object.values(item.models))
+                return sorted[0]?.id ?? ""
+              }),
+              connected: Object.keys(connected),
+            }
+          },
         })
-        // kilocode_change end
+
+        return c.json(result)
       },
     )
     .get(
@@ -84,7 +89,11 @@ export const ProviderRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        return c.json(await ProviderAuth.methods())
+        return c.json(
+          await StartupTrace.time("provider.auth", {
+            fn: () => ProviderAuth.methods(),
+          }),
+        )
       },
     )
     .post(

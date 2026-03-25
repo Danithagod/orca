@@ -1,0 +1,45 @@
+{
+  "$schema": "https://opencode-ai/desktop-theme.json",
+  "name": "Orca",
+  "id": "orca",
+  "light": {
+    "palette": {
+      "neutral": "#8f8f8f",
+      "primary": "#EC5B2B",
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "error": "#ef4444",
+      "info": "#00d4ff",
+      "interactive": "#EC5B2B"
+    },
+    "overrides": {
+      "border-base": "#EC5B2B80",
+      "border-weak-base": "#EC5B2B40",
+      "border-strong-base": "#EC5B2B"
+    }
+  },
+  "dark": {
+    "palette": {
+      "neutral": "#0a0a0a",
+      "primary": "#EC5B2B",
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "error": "#ef4444",
+      "info": "#00d4ff",
+      "interactive": "#EC5B2B"
+    },
+    "overrides": {
+      "background-base": "#0a1628",
+      "background-weak": "#0f1f35",
+      "background-strong": "#0a1628",
+      "background-stronger": "#060e1a",
+      "border-base": "#EC5B2B",
+      "border-weak-base": "#EC5B2B80",
+      "border-strong-base": "#EC5B2B",
+      "border-weaker-base": "#EC5B2B40",
+      "surface-base": "#EC5B2B15",
+      "surface-base-hover": "#EC5B2B25",
+      "surface-base-active": "#EC5B2B35"
+    }
+  }
+}

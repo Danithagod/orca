@@ -6,10 +6,10 @@ import { SerializeAddon } from "@/addons/serialize"
 import { matchKeybind, parseKeybind } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
-import { useSDK } from "@/context/sdk"
+import { useGlobalSDK } from "@/context/global-sdk"
 import { useServer } from "@/context/server"
 import { monoFontFamily, useSettings } from "@/context/settings"
-import type { LocalPTY } from "@/context/terminal"
+import { type LocalPTY, useTerminal } from "@/context/terminal"
 import { disposeIfDisposable, getHoveredLinkText, setOptionIfSupported } from "@/utils/runtime-adapters"
 import { terminalWriter } from "@/utils/terminal-writer"
 
@@ -151,14 +151,24 @@ const persistTerminal = (input: {
 
 export const Terminal = (props: TerminalProps) => {
   const platform = usePlatform()
-  const sdk = useSDK()
+  const globalSDK = useGlobalSDK()
+  const terminal = useTerminal()
   const settings = useSettings()
   const theme = useTheme()
   const language = useLanguage()
   const server = useServer()
+  const dir = createMemo(() => terminal.directory())
+  const client = createMemo(() => {
+    if (!dir()) return
+    return globalSDK.createClient({
+      directory: dir(),
+      throwOnError: true,
+    })
+  })
   let container!: HTMLDivElement
   const [local, others] = splitProps(props, ["pty", "class", "classList", "onConnect", "onConnectError"])
   const id = local.pty.id
+  const exited = createMemo(() => local.pty.status === "exited")
   const restore = typeof local.pty.buffer === "string" ? local.pty.buffer : ""
   const restoreSize =
     restore &&
@@ -181,6 +191,7 @@ export const Terminal = (props: TerminalProps) => {
   let sizeTimer: ReturnType<typeof setTimeout> | undefined
   let pendingSize: { cols: number; rows: number } | undefined
   let lastSize: { cols: number; rows: number } | undefined
+  let pendingInput: string[] = []
   let disposed = false
   const cleanups: VoidFunction[] = []
   const start =
@@ -201,7 +212,11 @@ export const Terminal = (props: TerminalProps) => {
   }
 
   const pushSize = (cols: number, rows: number) => {
-    return sdk.client.pty
+    if (exited()) return Promise.resolve()
+    const next = client()
+    if (!next) return Promise.resolve()
+
+    return next.pty
       .update({
         ptyID: id,
         size: { cols, rows },
@@ -209,6 +224,24 @@ export const Terminal = (props: TerminalProps) => {
       .catch((err) => {
         debugTerminal("failed to sync terminal size", err)
       })
+  }
+
+  const send = (data: string) => {
+    if (!data) return
+    if (exited()) return
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(data)
+      return
+    }
+    pendingInput.push(data)
+  }
+
+  const flushInput = () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    for (const data of pendingInput) {
+      ws.send(data)
+    }
+    pendingInput = []
   }
 
   const getTerminalColors = (): TerminalColors => {
@@ -326,6 +359,9 @@ export const Terminal = (props: TerminalProps) => {
 
   onMount(() => {
     const run = async () => {
+      const currentDir = dir()
+      if (!currentDir) throw new Error("Terminal directory not available")
+
       const loaded = await loadGhostty()
       if (disposed) return
 
@@ -396,10 +432,12 @@ export const Terminal = (props: TerminalProps) => {
         scheduleSize(size.cols, size.rows)
       })
       cleanups.push(() => disposeIfDisposable(onResize))
-      const onData = t.onData((data) => {
-        if (ws?.readyState === WebSocket.OPEN) ws.send(data)
-      })
-      cleanups.push(() => disposeIfDisposable(onData))
+      if (!exited()) {
+        const onData = t.onData((data) => {
+          if (ws?.readyState === WebSocket.OPEN) ws.send(data)
+        })
+        cleanups.push(() => disposeIfDisposable(onData))
+      }
       const onKey = t.onKey((key) => {
         if (key.key == "Enter") {
           props.onSubmit?.()
@@ -440,6 +478,8 @@ export const Terminal = (props: TerminalProps) => {
         startResize()
       }
 
+      if (exited()) return
+
       // t.onScroll((ydisp) => {
       // console.log("Scroll position:", ydisp)
       // })
@@ -447,8 +487,8 @@ export const Terminal = (props: TerminalProps) => {
       const once = { value: false }
       let closing = false
 
-      const url = new URL(sdk.url + `/pty/${id}/connect`)
-      url.searchParams.set("directory", sdk.directory)
+      const url = new URL(globalSDK.url + `/pty/${id}/connect`)
+      url.searchParams.set("directory", currentDir)
       url.searchParams.set("cursor", String(start !== undefined ? start : restore ? -1 : 0))
       url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
       url.username = server.current?.http.username ?? ""
@@ -460,6 +500,7 @@ export const Terminal = (props: TerminalProps) => {
 
       const handleOpen = () => {
         local.onConnect?.()
+        flushInput()
         scheduleSize(t.cols, t.rows)
       }
       socket.addEventListener("open", handleOpen)
@@ -523,6 +564,13 @@ export const Terminal = (props: TerminalProps) => {
         socket.removeEventListener("close", handleClose)
         if (socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) socket.close(1000)
       })
+
+      cleanups.push(
+        terminal.subscribe(id, (data) => {
+          send(data)
+          flushInput()
+        }) ?? (() => undefined),
+      )
     }
 
     void run().catch((err) => {

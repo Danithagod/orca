@@ -11,6 +11,7 @@ import { SessionStatus } from "@/session/status"
 import { SessionSummary } from "@/session/summary"
 import { Todo } from "../../session/todo"
 import { Agent } from "../../agent/agent"
+import { Instance } from "@/project/instance"
 import { Snapshot } from "@/snapshot"
 import { Log } from "../../util/log"
 import { PermissionNext } from "@/permission/next"
@@ -864,8 +865,19 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
-        const msg = await SessionPrompt.shell({ ...body, sessionID })
-        return c.json(msg)
+        const dir = Instance.directory
+        const abort = () =>
+          void Instance.provide({
+            directory: dir,
+            fn: () => SessionPrompt.cancel(sessionID),
+          })
+        c.req.raw.signal.addEventListener("abort", abort, { once: true })
+        try {
+          const msg = await SessionPrompt.shell({ ...body, sessionID })
+          return c.json(msg)
+        } finally {
+          c.req.raw.signal.removeEventListener("abort", abort)
+        }
       },
     )
     .post(

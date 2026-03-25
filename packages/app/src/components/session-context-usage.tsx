@@ -1,6 +1,6 @@
 import { Match, Show, Switch, createMemo } from "solid-js"
 import { Tooltip, type TooltipProps } from "@opencode-ai/ui/tooltip"
-import { ProgressCircle } from "@opencode-ai/ui/progress-circle"
+import { Icon } from "@opencode-ai/ui/icon"
 import { Button } from "@opencode-ai/ui/button"
 import { useParams } from "@solidjs/router"
 
@@ -65,31 +65,69 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
     })
   }
 
+  const remaining = createMemo(() => {
+    const usage = context()?.usage
+    return usage !== null ? 100 - (usage ?? 0) : null
+  })
+
+  const colorClass = createMemo(() => {
+    const rem = remaining()
+    if (rem === null) return "text-text-strong"
+    if (rem >= 60) return "text-icon-success-base"
+    if (rem >= 30) return "text-icon-warning-base"
+    return "text-icon-critical-base"
+  })
+
   const circle = () => (
-    <div class="flex items-center justify-center">
-      <ProgressCircle size={16} strokeWidth={2} percentage={context()?.usage ?? 0} />
+    <div class="flex items-center gap-1.5 px-3 h-7 rounded-full bg-surface-raised-base border border-border-weak-base text-[10px] font-medium tracking-tight">
+      <Show when={context() && context()?.usage !== null}>
+        <div class="flex items-center gap-1" classList={{ [colorClass()]: true }}>
+          <Icon name="brain" size="small" class="size-3" />
+          <span>{remaining()}% left</span>
+        </div>
+        <div class="w-px h-3 bg-border-weak-base mx-0.5 opacity-50" />
+      </Show>
+      <div class="flex items-center gap-1 text-text-strong">
+        <Icon name="plus-small" size="small" class="size-3 text-icon-weak" />
+        <span>{cost()}</span>
+      </div>
     </div>
   )
 
+  const formatTokens = (n: number) => {
+    if (n < 1000) return n.toString()
+    return (n / 1000).toFixed(1) + "k"
+  }
+
   const tooltipValue = () => (
-    <div>
+    <div class="flex flex-col gap-1.5 py-1">
       <Show when={context()}>
         {(ctx) => (
           <>
-            <div class="flex items-center gap-2">
-              <span class="text-text-invert-strong">{ctx().total.toLocaleString(language.intl())}</span>
+            <div class="flex items-center justify-between gap-4">
+              <span class="text-text-invert-base">{language.t("context.stats.model")}</span>
+              <span class="text-text-invert-strong text-right">{ctx().modelLabel}</span>
+            </div>
+            <div class="flex items-center justify-between gap-4">
               <span class="text-text-invert-base">{language.t("context.usage.tokens")}</span>
+              <span class="text-text-invert-strong text-right">{ctx().total.toLocaleString(language.intl())}</span>
             </div>
-            <div class="flex items-center gap-2">
-              <span class="text-text-invert-strong">{ctx().usage ?? 0}%</span>
-              <span class="text-text-invert-base">{language.t("context.usage.usage")}</span>
-            </div>
+            <Show when={ctx().usage !== null}>
+              <div class="flex items-center justify-between gap-4">
+                <span class="text-text-invert-base">{language.t("context.usage.usage")}</span>
+                <span class="text-text-invert-strong text-right">{ctx().usage}%</span>
+              </div>
+              <div class="flex items-center justify-between gap-4">
+                <span class="text-text-invert-base">Remaining</span>
+                <span class="text-text-invert-strong text-right">{100 - (ctx().usage ?? 0)}%</span>
+              </div>
+            </Show>
           </>
         )}
       </Show>
-      <div class="flex items-center gap-2">
-        <span class="text-text-invert-strong">{cost()}</span>
+      <div class="flex items-center justify-between gap-4 border-t border-white/10 pt-1.5 mt-0.5">
         <span class="text-text-invert-base">{language.t("context.usage.cost")}</span>
+        <span class="text-text-invert-strong text-right">{cost()}</span>
       </div>
     </div>
   )
@@ -103,7 +141,7 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
             <Button
               type="button"
               variant="ghost"
-              class="size-6"
+              class="h-7 w-auto p-0 rounded-full hover:bg-surface-raised-base-active transition-colors"
               onClick={openContext}
               aria-label={language.t("context.usage.view")}
             >

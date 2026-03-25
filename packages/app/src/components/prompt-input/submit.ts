@@ -12,6 +12,7 @@ import { usePermission } from "@/context/permission"
 import { type ImageAttachmentPart, type Prompt, usePrompt } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
+import { clearShellRequest, startShellRequest } from "@/pages/session/shell-request"
 import { Identifier } from "@/utils/id"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { buildRequestParts } from "./build-request-parts"
@@ -245,19 +246,28 @@ export function createPromptSubmit(input: PromptSubmitInput) {
 
     if (mode === "shell") {
       clearInput()
+      const abort = new AbortController()
+      startShellRequest(session.id, abort)
       client.session
-        .shell({
-          sessionID: session.id,
-          agent,
-          model,
-          command: text,
-        })
+        .shell(
+          {
+            sessionID: session.id,
+            agent,
+            model,
+            command: text,
+          },
+          { signal: abort.signal },
+        )
         .catch((err) => {
+          if (abort.signal.aborted) return
           showToast({
             title: language.t("prompt.toast.shellSendFailed.title"),
             description: errorMessage(err),
           })
           restoreInput()
+        })
+        .finally(() => {
+          clearShellRequest(session.id, abort)
         })
       return
     }

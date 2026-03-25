@@ -47,6 +47,7 @@ import { getDirectory as _getDirectory, getFilename } from "@opencode-ai/util/pa
 import { checksum } from "@opencode-ai/util/encode"
 import { Tooltip } from "./tooltip"
 import { IconButton } from "./icon-button"
+import { Spinner } from "./spinner"
 import { TextShimmer } from "./text-shimmer"
 import { AnimatedCountList } from "./tool-count-summary"
 import { ToolStatusTitle } from "./tool-status-title"
@@ -141,9 +142,22 @@ export interface MessagePartProps {
   defaultOpen?: boolean
   showAssistantCopyPartID?: string | null
   turnDurationMs?: number
+  onCancelTool?: ToolHandler
+  onOpenTerminal?: ToolHandler
 }
 
 export type PartComponent = Component<MessagePartProps>
+
+type ToolHandler = (tool: ToolAction) => void | Promise<void>
+
+export type ToolAction = {
+  partID?: string
+  callID?: string
+  tool: string
+  command?: string
+  status?: string
+  ptyID?: string
+}
 
 export const PART_MAPPING: Record<string, PartComponent | undefined> = {}
 
@@ -469,6 +483,8 @@ export function AssistantParts(props: {
   showReasoningSummaries?: boolean
   shellToolDefaultOpen?: boolean
   editToolDefaultOpen?: boolean
+  onCancelTool?: ToolHandler
+  onOpenTerminal?: ToolHandler
 }) {
   const data = useData()
   const emptyParts: PartType[] = []
@@ -543,6 +559,8 @@ export function AssistantParts(props: {
                         showAssistantCopyPartID={props.showAssistantCopyPartID}
                         turnDurationMs={props.turnDurationMs}
                         defaultOpen={partDefaultOpen(part()!, props.shellToolDefaultOpen, props.editToolDefaultOpen)}
+                        onCancelTool={props.onCancelTool}
+                        onOpenTerminal={props.onOpenTerminal}
                       />
                     </Show>
                   </Show>
@@ -1079,6 +1097,8 @@ export function Part(props: MessagePartProps) {
         defaultOpen={props.defaultOpen}
         showAssistantCopyPartID={props.showAssistantCopyPartID}
         turnDurationMs={props.turnDurationMs}
+        onCancelTool={props.onCancelTool}
+        onOpenTerminal={props.onOpenTerminal}
       />
     </Show>
   )
@@ -1088,12 +1108,16 @@ export interface ToolProps {
   input: Record<string, any>
   metadata: Record<string, any>
   tool: string
+  partID?: string
+  callID?: string
   output?: string
   status?: string
   hideDetails?: boolean
   defaultOpen?: boolean
   forceOpen?: boolean
   locked?: boolean
+  onCancelTool?: ToolHandler
+  onOpenTerminal?: ToolHandler
 }
 
 export type ToolComponent = Component<ToolProps>
@@ -1216,12 +1240,16 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
               component={render()}
               input={input()}
               tool={part().tool}
+              partID={part().id}
+              callID={part().callID}
               metadata={partMetadata()}
               // @ts-expect-error
               output={part().state.output}
               status={part().state.status}
               hideDetails={props.hideDetails}
               defaultOpen={props.defaultOpen}
+              onCancelTool={props.onCancelTool}
+              onOpenTerminal={props.onOpenTerminal}
             />
           </Match>
         </Switch>
@@ -1644,12 +1672,37 @@ ToolRegistry.register({
     const i18n = useI18n()
     const pending = () => props.status === "pending" || props.status === "running"
     const sawPending = pending()
+    const command = createMemo(() => {
+      const value = props.input.command ?? props.metadata.command
+      return typeof value === "string" ? value : ""
+    })
+    const ptyID = createMemo(() => {
+      const value = props.metadata.ptyID
+      return typeof value === "string" ? value : ""
+    })
+    const action = createMemo<ToolAction>(() => ({
+      partID: props.partID,
+      callID: props.callID,
+      tool: props.tool,
+      command: command(),
+      status: props.status,
+      ptyID: ptyID() || undefined,
+    }))
     const text = createMemo(() => {
-      const cmd = props.input.command ?? props.metadata.command ?? ""
+      const cmd = command()
       const out = stripAnsi(props.output || props.metadata.output || "")
       return `$ ${cmd}${out ? "\n\n" + out : ""}`
     })
     const [copied, setCopied] = createSignal(false)
+    const [stopping, setStopping] = createSignal(false)
+    const busy = createMemo(() => stopping() || props.metadata.stopping === true)
+    const interrupted = createMemo(() => props.metadata.interrupted === true)
+    const handoff = createMemo(() => !!ptyID() && pending() && !busy())
+
+    createEffect(() => {
+      if (pending()) return
+      setStopping(false)
+    })
 
     const handleCopy = async () => {
       const content = text()
@@ -1657,6 +1710,17 @@ ToolRegistry.register({
       await navigator.clipboard.writeText(content)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+    }
+
+    const handleCancel = async (e: MouseEvent) => {
+      e.stopPropagation()
+      if (!props.onCancelTool || busy()) return
+      setStopping(true)
+      try {
+        await props.onCancelTool(action())
+      } catch {
+        setStopping(false)
+      }
     }
 
     return (
@@ -1669,6 +1733,12 @@ ToolRegistry.register({
               <span data-slot="basic-tool-tool-title">
                 <TextShimmer text={i18n.t("ui.tool.shell")} active={pending()} />
               </span>
+              <Show when={busy()}>
+                <ShellSubmessage text={i18n.t("ui.tool.shell.stopping") ?? "Stopping shell..."} />
+              </Show>
+              <Show when={!pending() && interrupted()}>
+                <ShellSubmessage text={i18n.t("ui.message.interrupted")} animate={sawPending} />
+              </Show>
               <Show when={!pending() && props.input.description}>
                 <ShellSubmessage text={props.input.description} animate={sawPending} />
               </Show>
@@ -1678,6 +1748,43 @@ ToolRegistry.register({
       >
         <div data-component="bash-output">
           <div data-slot="bash-copy">
+            <Show when={props.onOpenTerminal && handoff()}>
+              <Tooltip value={i18n.t("ui.tool.shell.openTerminal") ?? "Open in Terminal"} placement="top" gutter={4}>
+                <IconButton
+                  icon="console"
+                  size="small"
+                  variant="secondary"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    props.onOpenTerminal?.(action())
+                  }}
+                  aria-label={i18n.t("ui.tool.shell.openTerminal") ?? "Open in Terminal"}
+                />
+              </Tooltip>
+            </Show>
+            <Show when={pending() && props.onCancelTool}>
+              <Show
+                when={!busy()}
+                fallback={
+                  <div data-slot="bash-cancel-status">
+                    <Spinner class="size-4 text-icon-weak" />
+                    <span>{i18n.t("ui.tool.shell.stopping") ?? "Stopping..."}</span>
+                  </div>
+                }
+              >
+                <Tooltip value={i18n.t("ui.tool.shell.cancel") ?? "Cancel Command"} placement="top" gutter={4}>
+                  <IconButton
+                    icon="stop"
+                    size="small"
+                    variant="secondary"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={handleCancel}
+                    aria-label={i18n.t("ui.tool.shell.cancel") ?? "Cancel Command"}
+                  />
+                </Tooltip>
+              </Show>
+            </Show>
             <Tooltip
               value={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copy")}
               placement="top"

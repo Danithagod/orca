@@ -5,6 +5,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { MessageNav } from "@opencode-ai/ui/message-nav"
 import { Spinner } from "@opencode-ai/ui/spinner"
+import { Tag } from "@opencode-ai/ui/tag"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { base64Encode } from "@opencode-ai/util/encode"
 import { getFilename } from "@opencode-ai/util/path"
@@ -20,6 +21,14 @@ import { sessionPermissionRequest } from "../session/composer/session-request-tr
 import { hasProjectPermissions } from "./helpers"
 
 const KILO_PROJECT_ID = "4b0ea68d7af9a6031a7ffda7ad66e0cb83315750"
+
+const parentTitlePrefix = "New session - "
+const childTitlePrefix = "Child session - "
+const defaultTitleRegex = new RegExp(`^(${parentTitlePrefix}|${childTitlePrefix})\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$`)
+
+function isDefaultTitle(title: string) {
+  return defaultTitleRegex.test(title)
+}
 
 export const ProjectIcon = (props: { project: LocalProject; class?: string; notify?: boolean }): JSX.Element => {
   const globalSync = useGlobalSync()
@@ -80,6 +89,7 @@ export type SessionItemProps = {
   clearHoverProjectSoon: () => void
   prefetchSession: (session: Session, priority?: "high" | "low") => void
   archiveSession: (session: Session) => Promise<void>
+  index?: number
 }
 
 const SessionRow = (props: {
@@ -98,6 +108,8 @@ const SessionRow = (props: {
   prefetchSession: (session: Session, priority?: "high" | "low") => void
   scheduleHoverPrefetch: () => void
   cancelHoverPrefetch: () => void
+  index?: number
+  language: ReturnType<typeof useLanguage>
 }): JSX.Element => (
   <A
     href={`/${props.slug}/session/${props.session.id}`}
@@ -113,29 +125,20 @@ const SessionRow = (props: {
       props.clearHoverProjectSoon()
     }}
   >
-    <div class="flex items-center gap-1 w-full">
-      <div
-        class="shrink-0 size-6 flex items-center justify-center"
-        style={{ color: props.tint() ?? "var(--icon-interactive-base)" }}
+    <div class="flex items-center gap-1 w-full min-w-0">
+      <span
+        class="truncate text-12-medium"
+        style={{ color: props.tint() ?? "var(--text-strong-base)" }}
       >
-        <Switch fallback={<Icon name="dash" size="small" class="text-icon-weak" />}>
-          <Match when={props.isWorking()}>
-            <Spinner class="size-[15px]" />
-          </Match>
-          <Match when={props.hasPermissions()}>
-            <div class="size-1.5 rounded-full bg-surface-warning-strong" />
-          </Match>
-          <Match when={props.hasError()}>
-            <div class="size-1.5 rounded-full bg-text-diff-delete-base" />
-          </Match>
-          <Match when={props.unseenCount() > 0}>
-            <div class="size-1.5 rounded-full bg-text-interactive-base" />
-          </Match>
-        </Switch>
-      </div>
-      <span class="text-14-regular text-text-strong grow-1 min-w-0 overflow-hidden text-ellipsis truncate">
-        {props.session.title}
+        {isDefaultTitle(props.session.title)
+          ? `${props.language.t("common.session")} ${props.index !== undefined ? props.index + 1 : ""}`.trim()
+          : props.session.title}
       </span>
+      <Show when={props.sidebarOpened() && !isDefaultTitle(props.session.title)}>
+        <span class="text-12-regular text-text-weak truncate min-w-0 ml-1 opacity-50">
+          #{props.index !== undefined ? props.index + 1 : props.session.id.slice(-4)}
+        </span>
+      </Show>
     </div>
   </A>
 )
@@ -270,6 +273,8 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
       prefetchSession={props.prefetchSession}
       scheduleHoverPrefetch={scheduleHoverPrefetch}
       cancelHoverPrefetch={cancelHoverPrefetch}
+      index={props.index}
+      language={language}
     />
   )
 
@@ -360,12 +365,10 @@ export const NewSessionItem = (props: {
         props.clearHoverProjectSoon()
       }}
     >
-      <div class="flex items-center gap-1 w-full">
-        <div class="shrink-0 size-6 flex items-center justify-center">
+      <div class="flex items-center gap-1 w-full min-w-0">
+        <span class="text-12-medium truncate flex items-center gap-1">
           <Icon name="plus-small" size="small" class="text-icon-weak" />
-        </div>
-        <span class="text-14-regular text-text-strong grow-1 min-w-0 overflow-hidden text-ellipsis truncate">
-          {label}
+          <Show when={props.sidebarExpanded()}>{label}</Show>
         </span>
       </div>
     </A>

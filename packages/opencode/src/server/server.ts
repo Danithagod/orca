@@ -53,9 +53,27 @@ import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
+import { StartupTrace } from "@/startup/trace"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
+
+const startupPaths = new Set([
+  "/agent",
+  "/command",
+  "/config",
+  "/lsp",
+  "/mcp",
+  "/path",
+  "/permission",
+  "/project/current",
+  "/provider",
+  "/provider/auth",
+  "/question",
+  "/session",
+  "/session/status",
+  "/vcs",
+])
 
 export namespace Server {
   const log = Log.create({ service: "server" })
@@ -225,17 +243,28 @@ export namespace Server {
             })(),
           )
 
-          return WorkspaceContext.provide({
-            workspaceID,
-            async fn() {
-              return Instance.provide({
-                directory,
-                init: InstanceBootstrap,
-                async fn() {
-                  return next()
-                },
-              })
+          const fn = () =>
+            WorkspaceContext.provide({
+              workspaceID,
+              async fn() {
+                return Instance.provide({
+                  directory,
+                  init: InstanceBootstrap,
+                  async fn() {
+                    return next()
+                  },
+                })
+              },
+            })
+
+          if (!startupPaths.has(c.req.path)) return fn()
+          return StartupTrace.time("request.instance", {
+            extra: {
+              directory,
+              path: c.req.path,
+              workspaceID,
             },
+            fn,
           })
         })
         .use(WorkspaceRouterMiddleware)
@@ -244,9 +273,9 @@ export namespace Server {
           openAPIRouteHandler(app, {
             documentation: {
               info: {
-                title: "kilo", // kilocode_change
+                title: "orca", // kilocode_change
                 version: "0.0.3",
-                description: "kilo api", // kilocode_change
+                description: "orca api", // kilocode_change
               },
               openapi: "3.1.1",
             },
@@ -632,9 +661,9 @@ export namespace Server {
     const result = await generateSpecs(App() as Hono, {
       documentation: {
         info: {
-          title: "kilo", // kilocode_change
+          title: "orca", // kilocode_change
           version: "1.0.0",
-          description: "kilo api", // kilocode_change
+          description: "orca api", // kilocode_change
         },
         openapi: "3.1.1",
       },

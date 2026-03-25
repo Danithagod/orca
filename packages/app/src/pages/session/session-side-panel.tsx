@@ -3,6 +3,7 @@ import { createStore } from "solid-js/store"
 import { createMediaQuery } from "@solid-primitives/media"
 import { useParams } from "@solidjs/router"
 import { Tabs } from "@opencode-ai/ui/tabs"
+import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
@@ -291,8 +292,8 @@ export function SessionSidePanel(props: {
                           hideCloseButton
                           onMiddleClick={() => tabs().close("context")}
                         >
-                          <div class="flex items-center gap-2">
-                            <SessionContextUsage variant="indicator" />
+                          <div class="flex items-center gap-1.5">
+                            <Icon name="brain" size="small" class="text-icon-weak" />
                             <div>{language.t("session.tab.context")}</div>
                           </div>
                         </Tabs.Trigger>

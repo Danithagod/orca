@@ -11,6 +11,7 @@ import { Instance } from "../project/instance"
 import { Ripgrep } from "./ripgrep"
 import fuzzysort from "fuzzysort"
 import { Global } from "../global"
+import { StartupTrace } from "@/startup/trace"
 
 export namespace File {
   const log = Log.create({ service: "file" })
@@ -339,8 +340,15 @@ export namespace File {
     const isGlobalHome = Instance.directory === Global.Path.home && Instance.project.id === "global"
 
     const fn = async (result: Entry) => {
+      const timer = StartupTrace.start("file.scan", {
+        directory: Instance.directory,
+        globalHome: isGlobalHome,
+      })
       // Disable scanning if in root of file system
-      if (Instance.directory === path.parse(Instance.directory).root) return
+      if (Instance.directory === path.parse(Instance.directory).root) {
+        timer.stop({ skipped: true })
+        return
+      }
       fetching = true
 
       if (isGlobalHome) {
@@ -375,6 +383,10 @@ export namespace File {
         result.dirs = Array.from(dirs).toSorted()
         cache = result
         fetching = false
+        timer.stop({
+          dirs: result.dirs.length,
+          files: result.files.length,
+        })
         return
       }
 
@@ -394,6 +406,10 @@ export namespace File {
       }
       cache = result
       fetching = false
+      timer.stop({
+        dirs: result.dirs.length,
+        files: result.files.length,
+      })
     }
     fn(cache)
 

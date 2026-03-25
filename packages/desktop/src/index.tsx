@@ -10,6 +10,7 @@ import {
   useCommand,
 } from "@opencode-ai/app"
 import { Splash } from "@opencode-ai/ui/logo"
+import { Progress } from "@opencode-ai/ui/progress"
 import type { AsyncStorage } from "@solid-primitives/storage"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { readImage } from "@tauri-apps/plugin-clipboard-manager"
@@ -22,7 +23,7 @@ import { relaunch } from "@tauri-apps/plugin-process"
 import { open as shellOpen } from "@tauri-apps/plugin-shell"
 import { Store } from "@tauri-apps/plugin-store"
 import { check, type Update } from "@tauri-apps/plugin-updater"
-import { createResource, type JSX, onCleanup, onMount, Show } from "solid-js"
+import { createResource, type JSX, onCleanup, onMount, Show, createSignal, createMemo } from "solid-js"
 import { render } from "solid-js/web"
 import pkg from "../package.json"
 import { initI18n, t } from "./i18n"
@@ -30,7 +31,7 @@ import { UPDATER_ENABLED } from "./updater"
 import { webviewZoom } from "./webview-zoom"
 import "./styles.css"
 import { Channel } from "@tauri-apps/api/core"
-import { commands, ServerReadyData, type InitStep } from "./bindings"
+import { commands, ServerReadyData, type InitStep, events } from "./bindings"
 import { createMenu } from "./menu"
 
 const root = document.getElementById("root")
@@ -476,7 +477,53 @@ render(() => {
 
 // Gate component that waits for the server to be ready
 function ServerGate(props: { children: (data: ServerReadyData) => JSX.Element }) {
-  const [serverData] = createResource(() => commands.awaitInitialization(new Channel<InitStep>() as any))
+  const [step, setStep] = createSignal<InitStep | null>(null)
+  const [line, setLine] = createSignal(0)
+  const [percent, setPercent] = createSignal(0)
+
+  const lines = [
+    t("desktop.loading.status.initial"),
+    t("desktop.loading.status.migrating"),
+    t("desktop.loading.status.waiting"),
+  ]
+  const delays = [3000, 9000]
+
+  const phase = createMemo(() => step()?.phase)
+
+  const value = createMemo(() => {
+    if (phase() === "done") return 100
+    return Math.max(25, Math.min(100, percent()))
+  })
+
+  const [serverData] = createResource(() => {
+    const channel = new Channel<InitStep>()
+    channel.onmessage = (next) => setStep(next)
+    return commands.awaitInitialization(channel as any)
+  })
+
+  onMount(() => {
+    setLine(0)
+    setPercent(0)
+
+    const timers = delays.map((ms, i) => setTimeout(() => setLine(i + 1), ms))
+
+    const listener = events.sqliteMigrationProgress.listen((e) => {
+      if (e.payload.type === "InProgress") setPercent(Math.max(0, Math.min(100, e.payload.value)))
+      if (e.payload.type === "Done") setPercent(100)
+    })
+
+    onCleanup(() => {
+      listener.then((cb) => cb())
+      timers.forEach(clearTimeout)
+    })
+  })
+
+  const status = createMemo(() => {
+    if (phase() === "done") return t("desktop.loading.status.done")
+    if (phase() === "sqlite_waiting") return lines[line()]
+    return t("desktop.loading.status.initial")
+  })
+
   if (serverData.state === "errored") throw serverData.error
 
   return (
@@ -484,7 +531,20 @@ function ServerGate(props: { children: (data: ServerReadyData) => JSX.Element })
       when={serverData.state !== "pending" && serverData()}
       fallback={
         <div class="h-screen w-screen flex flex-col items-center justify-center bg-background-base">
-          <Splash class="w-16 h-20 opacity-50 animate-pulse" />
+          <div class="flex flex-col items-center gap-11">
+            <Splash class="w-20 h-25 opacity-15" />
+            <div class="w-60 flex flex-col items-center gap-4" aria-live="polite">
+              <span class="w-full overflow-hidden text-center text-ellipsis whitespace-nowrap text-text-strong text-14-normal">
+                {status()}
+              </span>
+              <Progress
+                value={value()}
+                class="w-20 [&_[data-slot='progress-track']]:h-1 [&_[data-slot='progress-track']]:border-0 [&_[data-slot='progress-track']]:rounded-none [&_[data-slot='progress-track']]:bg-surface-weak [&_[data-slot='progress-fill']]:rounded-none [&_[data-slot='progress-fill']]:bg-icon-warning-base"
+                aria-label={t("desktop.loading.progressAria")}
+                getValueLabel={({ value }) => `${Math.round(value)}%`}
+              />
+            </div>
+          </div>
           <div data-tauri-decorum-tb class="flex flex-row absolute top-0 right-0 z-10 h-10" />
         </div>
       }

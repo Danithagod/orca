@@ -117,6 +117,8 @@ import type {
   PtyCreateResponses,
   PtyGetErrors,
   PtyGetResponses,
+  PtyInterruptErrors,
+  PtyInterruptResponses,
   PtyListResponses,
   PtyRemoveErrors,
   PtyRemoveResponses,
@@ -264,7 +266,7 @@ export class Config extends HeyApiClient {
   /**
    * Get global configuration
    *
-   * Retrieve the current global Kilo configuration settings and preferences.
+   * Retrieve the current global Orca configuration settings and preferences.
    */
   public get<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).get<GlobalConfigGetResponses, unknown, ThrowOnError>({
@@ -276,7 +278,7 @@ export class Config extends HeyApiClient {
   /**
    * Update global configuration
    *
-   * Update global Kilo configuration settings and preferences.
+   * Update global Orca configuration settings and preferences.
    */
   public update<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -302,7 +304,7 @@ export class Global extends HeyApiClient {
   /**
    * Get health
    *
-   * Get health information about the Kilo server.
+   * Get health information about the Orca server.
    */
   public health<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).get<GlobalHealthResponses, unknown, ThrowOnError>({
@@ -314,7 +316,7 @@ export class Global extends HeyApiClient {
   /**
    * Get global events
    *
-   * Subscribe to global events from the Kilo system using server-sent events.
+   * Subscribe to global events from the Orca system using server-sent events.
    */
   public event<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).sse.get<GlobalEventResponses, unknown, ThrowOnError>({
@@ -326,7 +328,7 @@ export class Global extends HeyApiClient {
   /**
    * Dispose instance
    *
-   * Clean up and dispose all Kilo instances, releasing all resources.
+   * Clean up and dispose all Orca instances, releasing all resources.
    */
   public dispose<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).post<GlobalDisposeResponses, unknown, ThrowOnError>({
@@ -401,7 +403,7 @@ export class Project extends HeyApiClient {
   /**
    * List all projects
    *
-   * Get a list of projects that have been opened with Kilo.
+   * Get a list of projects that have been opened with Orca.
    */
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -431,7 +433,7 @@ export class Project extends HeyApiClient {
   /**
    * Get current project
    *
-   * Retrieve the currently active project that Kilo is working with.
+   * Retrieve the currently active project that Orca is working with.
    */
   public current<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -545,7 +547,7 @@ export class Pty extends HeyApiClient {
   /**
    * List PTY sessions
    *
-   * Get a list of all active pseudo-terminal (PTY) sessions managed by Kilo.
+   * Get a list of all active pseudo-terminal (PTY) sessions managed by Orca.
    */
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -728,6 +730,45 @@ export class Pty extends HeyApiClient {
   }
 
   /**
+   * Interrupt PTY session
+   *
+   * Send an interrupt signal to the foreground process in a pseudo-terminal (PTY) session.
+   */
+  public interrupt<ThrowOnError extends boolean = false>(
+    parameters: {
+      ptyID: string
+      directory?: string
+      workspace?: string
+      forceAfter?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "ptyID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "forceAfter" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<PtyInterruptResponses, PtyInterruptErrors, ThrowOnError>({
+      url: "/pty/{ptyID}/interrupt",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Connect to PTY session
    *
    * Establish a WebSocket connection to interact with a pseudo-terminal (PTY) session in real-time.
@@ -764,7 +805,7 @@ export class Config2 extends HeyApiClient {
   /**
    * Get configuration
    *
-   * Retrieve the current Kilo configuration settings and preferences.
+   * Retrieve the current Orca configuration settings and preferences.
    */
   public get<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -794,7 +835,7 @@ export class Config2 extends HeyApiClient {
   /**
    * Update configuration
    *
-   * Update Kilo configuration settings and preferences.
+   * Update Orca configuration settings and preferences.
    */
   public update<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -1044,7 +1085,7 @@ export class Session extends HeyApiClient {
   /**
    * List sessions
    *
-   * Get a list of all Kilo sessions across projects, sorted by most recently updated. Archived sessions are excluded by default.
+   * Get a list of all Orca sessions across projects, sorted by most recently updated. Archived sessions are excluded by default.
    */
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -1378,7 +1419,7 @@ export class Session2 extends HeyApiClient {
   /**
    * List sessions
    *
-   * Get a list of all Kilo sessions, sorted by most recently updated.
+   * Get a list of all Orca sessions, sorted by most recently updated.
    */
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -1416,7 +1457,7 @@ export class Session2 extends HeyApiClient {
   /**
    * Create session
    *
-   * Create a new Kilo session for interacting with AI assistants and managing conversations.
+   * Create a new Orca session for interacting with AI assistants and managing conversations.
    */
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -1521,7 +1562,7 @@ export class Session2 extends HeyApiClient {
   /**
    * Get session
    *
-   * Retrieve detailed information about a specific Kilo session.
+   * Retrieve detailed information about a specific Orca session.
    */
   public get<ThrowOnError extends boolean = false>(
     parameters: {
@@ -4243,7 +4284,7 @@ export class Instance extends HeyApiClient {
   /**
    * Dispose instance
    *
-   * Clean up and dispose the current Kilo instance, releasing all resources.
+   * Clean up and dispose the current Orca instance, releasing all resources.
    */
   public dispose<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -4275,7 +4316,7 @@ export class Path extends HeyApiClient {
   /**
    * Get paths
    *
-   * Retrieve the current working directory and related path information for the Kilo instance.
+   * Retrieve the current working directory and related path information for the Orca instance.
    */
   public get<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -4339,7 +4380,7 @@ export class Command extends HeyApiClient {
   /**
    * List commands
    *
-   * Get a list of all available commands in the Kilo system.
+   * Get a list of all available commands in the Orca system.
    */
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -4416,7 +4457,7 @@ export class App extends HeyApiClient {
   /**
    * List agents
    *
-   * Get a list of all available AI agents in the Kilo system.
+   * Get a list of all available AI agents in the Orca system.
    */
   public agents<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -4446,7 +4487,7 @@ export class App extends HeyApiClient {
   /**
    * List skills
    *
-   * Get a list of all available skills in the Kilo system.
+   * Get a list of all available skills in the Orca system.
    */
   public skills<ThrowOnError extends boolean = false>(
     parameters?: {

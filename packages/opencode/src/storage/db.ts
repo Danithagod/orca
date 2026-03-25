@@ -32,9 +32,9 @@ export namespace Database {
     const channel = Installation.CHANNEL
     // kilocode_change start
     if (["latest", "beta"].includes(channel) || Flag.KILO_DISABLE_CHANNEL_DB)
-      return path.join(Global.Path.data, "kilo.db")
+      return path.join(Global.Path.data, "orca.db")
     const safe = channel.replace(/[^a-zA-Z0-9._-]/g, "-")
-    return path.join(Global.Path.data, `kilo-${safe}.db`)
+    return path.join(Global.Path.data, `orca-${safe}.db`)
     // kilocode_change end
   })
 

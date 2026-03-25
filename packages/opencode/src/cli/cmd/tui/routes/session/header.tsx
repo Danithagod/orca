@@ -3,17 +3,18 @@ import { useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { pipe, sumBy } from "remeda"
 import { useTheme } from "@tui/context/theme"
-import { SplitBorder } from "@tui/component/border"
+import { SplitBorder, OrcaBorder } from "@tui/component/border"
 import type { AssistantMessage, Session } from "@kilocode/sdk/v2"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "../../context/keybind"
 import { useTerminalDimensions } from "@opentui/solid"
+import { TextAttributes } from "@opentui/core"
 
 const Title = (props: { session: Accessor<Session> }) => {
   const { theme } = useTheme()
   return (
-    <text fg={theme.text}>
-      <span style={{ bold: true }}>#</span> <span style={{ bold: true }}>{props.session().title}</span>
+    <text fg={theme.accent} attributes={TextAttributes.BOLD}>
+      # {props.session().title}
     </text>
   )
 }
@@ -28,6 +29,8 @@ const ContextInfo = (props: { context: Accessor<string | undefined>; cost: Acces
     </Show>
   )
 }
+
+import { OrcaDivider, OrcaPanel } from "../../component/orca-ui"
 
 export function Header() {
   const route = useRouteData("session")
@@ -67,33 +70,26 @@ export function Header() {
   const narrow = createMemo(() => dimensions().width < 80)
 
   return (
-    <box flexShrink={0}>
-      <box
-        paddingTop={1}
-        paddingBottom={1}
-        paddingLeft={2}
-        paddingRight={1}
-        {...SplitBorder}
-        border={["left"]}
-        borderColor={theme.border}
-        flexShrink={0}
-        backgroundColor={theme.backgroundPanel}
-      >
+    <box flexShrink={0} marginBottom={1}>
+      <OrcaPanel borderStyle="rounded" borderColor={theme.accent} padding={0.5}>
         <Switch>
           <Match when={session()?.parentID}>
-            <box flexDirection="column" gap={1}>
-              <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={narrow() ? 1 : 0}>
-                <text fg={theme.text}>
-                  <b>Subagent session</b>
+            <box flexDirection="column" gap={0.5}>
+              <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={narrow() ? 0.5 : 0}>
+                <text fg={theme.primary} attributes={TextAttributes.BOLD}>
+                  Subagent session
                 </text>
                 <ContextInfo context={context} cost={cost} />
               </box>
+              <OrcaDivider />
               <box flexDirection="row" gap={2}>
                 <box
                   onMouseOver={() => setHover("parent")}
                   onMouseOut={() => setHover(null)}
                   onMouseUp={() => command.trigger("session.parent")}
                   backgroundColor={hover() === "parent" ? theme.backgroundElement : theme.backgroundPanel}
+                  paddingLeft={1}
+                  paddingRight={1}
                 >
                   <text fg={theme.text}>
                     Parent <span style={{ fg: theme.textMuted }}>{keybind.print("session_parent")}</span>
@@ -104,6 +100,8 @@ export function Header() {
                   onMouseOut={() => setHover(null)}
                   onMouseUp={() => command.trigger("session.child.previous")}
                   backgroundColor={hover() === "prev" ? theme.backgroundElement : theme.backgroundPanel}
+                  paddingLeft={1}
+                  paddingRight={1}
                 >
                   <text fg={theme.text}>
                     Prev <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle_reverse")}</span>
@@ -114,6 +112,8 @@ export function Header() {
                   onMouseOut={() => setHover(null)}
                   onMouseUp={() => command.trigger("session.child.next")}
                   backgroundColor={hover() === "next" ? theme.backgroundElement : theme.backgroundPanel}
+                  paddingLeft={1}
+                  paddingRight={1}
                 >
                   <text fg={theme.text}>
                     Next <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle")}</span>
@@ -129,7 +129,7 @@ export function Header() {
             </box>
           </Match>
         </Switch>
-      </box>
+      </OrcaPanel>
     </box>
   )
 }

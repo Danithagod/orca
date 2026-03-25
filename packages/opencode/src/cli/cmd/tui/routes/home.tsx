@@ -2,6 +2,7 @@ import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { createMemo, Match, onMount, Show, Switch } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { useKeybind } from "@tui/context/keybind"
+import { TextAttributes, RGBA } from "@opentui/core"
 import { Logo } from "../component/logo"
 import { Tips } from "../component/tips"
 import { Locale } from "@/util/locale"
@@ -16,6 +17,7 @@ import { useKV } from "../context/kv"
 import { useCommandDialog } from "../component/dialog-command"
 import { KiloNews } from "@/kilocode/components/kilo-news" // kilocode_change
 import { useConnected } from "../component/dialog-model" // kilocode_change
+import { OrcaCard, OrcaPanel, OrcaStatusBadge } from "../component/orca-ui" // kilocode_change
 
 // TODO: what is the best way to do this?
 let once = false
@@ -109,64 +111,69 @@ export function Home() {
   const directory = useDirectory()
 
   const keybind = useKeybind()
-
   return (
     <>
-      <box flexGrow={1} alignItems="center" paddingLeft={2} paddingRight={2}>
-        <box flexGrow={1} minHeight={0} />
-        <box height={4} minHeight={0} flexShrink={1} />
-        <box flexShrink={0}>
-          <Logo />
+      <box flexGrow={1} alignItems="center" paddingLeft={4} paddingRight={4} justifyContent="center">
+        <box width="100%" maxWidth={85}>
+          <OrcaPanel title="ORCA" borderStyle="rounded" borderColor={theme.accent} padding={2}>
+            <box alignItems="center" width="100%">
+              <box marginBottom={2}>
+                <Logo />
+              </box>
+
+              <box width="100%" maxWidth={75} zIndex={1000} marginBottom={2}>
+                <Prompt
+                  ref={(r) => {
+                    prompt = r
+                    promptRef.set(r)
+                  }}
+                  hint={Hint}
+                />
+              </box>
+
+              <box width="100%" maxWidth={75} flexDirection="row" gap={2}>
+                <Show when={!newsHidden()}>
+                  <box flexGrow={1} flexBasis={0}>
+                    <KiloNews />
+                  </box>
+                </Show>
+                <Show when={showTips()}>
+                  <box flexGrow={1} flexBasis={0}>
+                    <Tips
+                      tip={
+                        onboarding()
+                          ? "Using a free model \u2014 run {highlight}/connect{/highlight} to add your API key"
+                          : undefined
+                      }
+                    />
+                  </box>
+                </Show>
+              </box>
+            </box>
+          </OrcaPanel>
         </box>
-        <box height={1} minHeight={0} flexShrink={1} />
-        <box width="100%" maxWidth={75} zIndex={1000} paddingTop={1} flexShrink={0}>
-          <Prompt
-            ref={(r) => {
-              prompt = r
-              promptRef.set(r)
-            }}
-            hint={Hint}
-          />
-        </box>
-        {/* kilocode_change - KiloNews added */}
-        <box width="100%" maxWidth={75} alignItems="center" paddingTop={2} gap={1}>
-          <Show when={!newsHidden()}>
-            <KiloNews />
-          </Show>
-          <Show when={showTips()}>
-            <Tips
-              tip={
-                onboarding()
-                  ? "Using a free model \u2014 run {highlight}/connect{/highlight} to add your API key"
-                  : undefined
-              }
-            />
-          </Show>
-        </box>
-        <box flexGrow={1} minHeight={0} />
         <Toast />
       </box>
-      <box paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0} gap={2}>
+
+      <box paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0} gap={2} backgroundColor={theme.backgroundPanel}>
+        <text fg={theme.accent} attributes={TextAttributes.BOLD}>
+          Orca
+        </text>
+
+        <text fg={theme.textMuted}>│</text>
         <text fg={theme.textMuted}>{directory()}</text>
         <box gap={1} flexDirection="row" flexShrink={0}>
           <Show when={mcp()}>
-            <text fg={theme.text}>
-              <Switch>
-                <Match when={mcpError()}>
-                  <span style={{ fg: theme.error }}>⊙ </span>
-                </Match>
-                <Match when={true}>
-                  <span style={{ fg: connectedMcpCount() > 0 ? theme.success : theme.textMuted }}>⊙ </span>
-                </Match>
-              </Switch>
-              {connectedMcpCount()} MCP
-            </text>
+            <OrcaStatusBadge
+              status={mcpError() ? "error" : connectedMcpCount() > 0 ? "success" : "idle"}
+              label={`${connectedMcpCount()} MCP`}
+            />
             <text fg={theme.textMuted}>/status</text>
           </Show>
         </box>
         <box flexGrow={1} />
         <box flexShrink={0}>
-          <text fg={theme.textMuted}>{Installation.VERSION}</text>
+          <text fg={theme.accent}>v{Installation.VERSION}</text>
         </box>
       </box>
     </>

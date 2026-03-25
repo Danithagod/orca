@@ -7,7 +7,7 @@ import { Binary } from "@opencode-ai/util/binary"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
 import { createEffect, createMemo, createSignal, For, on, ParentProps, Show } from "solid-js"
 import { Dynamic } from "solid-js/web"
-import { AssistantParts, Message, Part, PART_MAPPING } from "./message-part"
+import { AssistantParts, Message, Part, PART_MAPPING, type ToolAction } from "./message-part"
 import { Card } from "./card"
 import { Accordion } from "./accordion"
 import { StickyAccordionHeader } from "./sticky-accordion-header"
@@ -148,6 +148,8 @@ export function SessionTurn(
     queued?: boolean
     status?: SessionStatus
     onUserInteracted?: () => void
+    onCancelTool?: (tool: ToolAction) => void | Promise<void>
+    onOpenTerminal?: (tool: ToolAction) => void | Promise<void>
     classes?: {
       root?: string
       content?: string
@@ -412,6 +414,8 @@ export function SessionTurn(
                     showReasoningSummaries={showReasoningSummaries()}
                     shellToolDefaultOpen={props.shellToolDefaultOpen}
                     editToolDefaultOpen={props.editToolDefaultOpen}
+                    onCancelTool={props.onCancelTool}
+                    onOpenTerminal={props.onOpenTerminal}
                   />
                 </div>
               </Show>

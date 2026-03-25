@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@kilocode/kilo-gateway",
+  "name": "@orca/gateway",
   "version": "7.0.51",
   "type": "module",
   "license": "MIT",
@@ -27,8 +27,8 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@kilocode/plugin": "workspace:*",
-    "@kilocode/sdk": "workspace:*",
+    "@orca/plugin": "workspace:*",
+    "@orca/sdk": "workspace:*",
     "@openrouter/ai-sdk-provider": "1.5.4",
     "@clack/prompts": "1.0.0-alpha.1",
     "ai": "catalog:",

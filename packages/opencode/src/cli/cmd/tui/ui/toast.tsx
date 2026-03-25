@@ -2,7 +2,7 @@ import { createContext, useContext, type ParentProps, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "@tui/context/theme"
 import { useTerminalDimensions } from "@opentui/solid"
-import { SplitBorder } from "../component/border"
+import { SplitBorder, OrcaBorder } from "../component/border"
 import { TextAttributes } from "@opentui/core"
 import z from "zod"
 import { TuiEvent } from "../event"
@@ -31,7 +31,11 @@ export function Toast() {
           backgroundColor={theme.backgroundPanel}
           borderColor={theme[current().variant]}
           border={["left", "right"]}
-          customBorderChars={SplitBorder.customBorderChars}
+          customBorderChars={{
+            ...SplitBorder.customBorderChars,
+            topLeft: OrcaBorder.rounded.topLeft,
+            bottomLeft: OrcaBorder.rounded.bottomLeft,
+          }}
         >
           <Show when={current().title}>
             <text attributes={TextAttributes.BOLD} marginBottom={1} fg={theme.text}>

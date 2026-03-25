@@ -39,11 +39,7 @@ import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
 import { GrowBox } from "./grow-box"
 import { COLLAPSIBLE_SPRING } from "./motion"
 import { busy, createThrottledValue, useToolFade, useContextToolPending } from "./tool-utils"
-import {
-  ContextToolGroupHeader,
-  ContextToolExpandedList,
-  ContextToolRollingResults,
-} from "./context-tool-results"
+import { ContextToolGroupHeader, ContextToolExpandedList, ContextToolRollingResults } from "./context-tool-results"
 import { ShellRollingResults } from "./shell-rolling-results"
 import { extractFilePathFromHref } from "../file-path"
 
@@ -117,9 +113,19 @@ export interface MessagePartProps {
   turnDiffSummary?: () => JSX.Element
   animate?: boolean
   working?: boolean
+  onCancelTool?: (tool: ToolAction) => void
+  onOpenTerminal?: (tool: ToolAction) => void
 }
 
 export type PartComponent = Component<MessagePartProps>
+
+export type ToolAction = {
+  partID?: string
+  callID?: string
+  tool: string
+  command?: string
+  status?: string
+}
 
 export const PART_MAPPING: Record<string, PartComponent | undefined> = {}
 
@@ -377,6 +383,8 @@ export function AssistantParts(props: {
   shellToolDefaultOpen?: boolean
   editToolDefaultOpen?: boolean
   animate?: boolean
+  onCancelTool?: (tool: ToolAction) => void
+  onOpenTerminal?: (tool: ToolAction) => void
 }) {
   const data = useData()
   const emptyParts: PartType[] = []
@@ -608,6 +616,24 @@ export function AssistantParts(props: {
                       part={value()}
                       animate={props.animate}
                       defaultOpen={props.shellToolDefaultOpen}
+                      onCancel={() =>
+                        props.onCancelTool?.({
+                          partID: value().id,
+                          callID: value().callID,
+                          tool: value().tool,
+                          command: value().state.input.command,
+                          status: value().state.status,
+                        })
+                      }
+                      onOpenTerminal={() =>
+                        props.onOpenTerminal?.({
+                          partID: value().id,
+                          callID: value().callID,
+                          tool: value().tool,
+                          command: value().state.input.command,
+                          status: value().state.status,
+                        })
+                      }
                     />
                   )}
                 </Show>
@@ -630,6 +656,8 @@ export function AssistantParts(props: {
                             hideDetails={false}
                             animate={props.animate}
                             working={props.working}
+                            onCancelTool={props.onCancelTool}
+                            onOpenTerminal={props.onOpenTerminal}
                           />
                         </div>
                       </PartGrow>

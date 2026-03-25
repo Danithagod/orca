@@ -74,6 +74,12 @@ export namespace Pty {
 
   export type UpdateInput = z.infer<typeof UpdateInput>
 
+  export const InterruptInput = z.object({
+    forceAfter: z.number().int().positive().optional(),
+  })
+
+  export type InterruptInput = z.infer<typeof InterruptInput>
+
   export const Event = {
     Created: BusEvent.define("pty.created", z.object({ info: Info })),
     Updated: BusEvent.define("pty.updated", z.object({ info: Info })),
@@ -88,6 +94,10 @@ export namespace Pty {
     bufferCursor: number
     cursor: number
     subscribers: Map<unknown, Socket>
+    listeners: Set<(chunk: string) => void>
+    removed: boolean
+    exited: Promise<{ exitCode: number; removed: boolean }>
+    exit: (result: { exitCode: number; removed: boolean }) => void
   }
 
   const state = Instance.state(
@@ -120,17 +130,17 @@ export namespace Pty {
   export async function create(input: CreateInput) {
     const id = Identifier.create("pty", false)
     const command = input.command || Shell.preferred()
-    const args = input.args || []
-    if (command.endsWith("sh")) {
+    const args = input.args ? [...input.args] : []
+    if (!input.args && command.endsWith("sh")) {
       args.push("-l")
     }
 
     const cwd = input.cwd || Instance.directory
-    const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
+    const shellEnv = input.env ? { env: {} } : await Plugin.trigger("shell.env", { cwd }, { env: {} })
     const env = {
       ...process.env,
-      ...input.env,
       ...shellEnv.env,
+      ...input.env,
       TERM: "xterm-256color",
       KILO_TERMINAL: "1",
     } as Record<string, string>
@@ -158,6 +168,10 @@ export namespace Pty {
       status: "running",
       pid: ptyProcess.pid,
     } as const
+    let exit = (_result: { exitCode: number; removed: boolean }): void => undefined
+    const exited = new Promise<{ exitCode: number; removed: boolean }>((resolve) => {
+      exit = resolve
+    })
     const session: ActiveSession = {
       info,
       process: ptyProcess,
@@ -165,10 +179,22 @@ export namespace Pty {
       bufferCursor: 0,
       cursor: 0,
       subscribers: new Map(),
+      listeners: new Set(),
+      removed: false,
+      exited,
+      exit,
     }
     state().set(id, session)
     ptyProcess.onData((chunk) => {
       session.cursor += chunk.length
+
+      for (const fn of session.listeners) {
+        try {
+          fn(chunk)
+        } catch {
+          // ignore
+        }
+      }
 
       for (const [key, ws] of session.subscribers.entries()) {
         if (ws.readyState !== 1) {
@@ -198,6 +224,7 @@ export namespace Pty {
       if (session.info.status === "exited") return
       log.info("session exited", { id, exitCode })
       session.info.status = "exited"
+      session.exit({ exitCode, removed: session.removed })
       Bus.publish(Event.Exited, { id, exitCode })
       remove(id)
     })
@@ -221,6 +248,7 @@ export namespace Pty {
   export async function remove(id: string) {
     const session = state().get(id)
     if (!session) return
+    session.removed = true
     state().delete(id)
     log.info("removing session", { id })
     try {
@@ -248,6 +276,44 @@ export namespace Pty {
     const session = state().get(id)
     if (session && session.info.status === "running") {
       session.process.write(data)
+    }
+  }
+
+  export function interrupt(id: string, input: InterruptInput = {}) {
+    const session = state().get(id)
+    if (!session || session.info.status !== "running") return false
+
+    log.info("interrupting session", { id, forceAfter: input.forceAfter })
+    session.process.write("\u0003")
+
+    if (input.forceAfter) {
+      setTimeout(() => {
+        const current = state().get(id)
+        if (!current || current.info.status !== "running") return
+        void remove(id)
+      }, input.forceAfter)
+    }
+
+    return true
+  }
+
+  export function wait(id: string) {
+    return state().get(id)?.exited
+  }
+
+  export function subscribe(id: string, fn: (chunk: string) => void) {
+    const session = state().get(id)
+    if (!session) return () => undefined
+    session.listeners.add(fn)
+    if (session.buffer) {
+      try {
+        fn(session.buffer)
+      } catch {
+        // ignore
+      }
+    }
+    return () => {
+      session.listeners.delete(fn)
     }
   }
 

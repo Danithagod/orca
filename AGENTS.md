@@ -1,127 +1,66 @@
 # AGENTS.md
 
-Kilo CLI is an open source AI coding agent that generates code from natural language, automates tasks, and supports 500+ AI models.
+Kilo CLI is an open source AI coding agent built as a Turborepo + Bun monorepo.
 
-- ALWAYS USE PARALLEL TOOLS WHEN APPLICABLE.
-- The default branch in this repo is `main`.
-- Prefer automation: execute requested actions without confirmation unless blocked by missing info or safety/irreversibility.
-- You may be running in a git worktree. All changes must be made in your current working directory — never modify files in the main repo checkout.
+- **Default branch**: `main`
+- **Run tests from `packages/opencode/`, NOT from root**
+- All changes must be in your current working directory — never modify the main repo checkout
 
-## Build and Dev
+## Build, Test, Lint Commands
 
-- **Dev**: `bun run dev` (runs from root) or `bun run --cwd packages/opencode --conditions=browser src/index.ts`
-- **Typecheck**: `bun turbo typecheck` (uses `tsgo`, not `tsc`)
-- **Test**: `bun test` from `packages/opencode/` (NOT from root -- root blocks tests)
-- **Single test**: `bun test test/tool/tool.test.ts` from `packages/opencode/`
-- **SDK regen**: After changing server endpoints in `packages/opencode/src/server/`, run `./script/generate.ts` from root to regenerate `packages/sdk/js/`
-- **Knip** (unused exports): `bun run knip` from `packages/kilo-vscode/`. CI runs this — all exported types/functions must be imported somewhere. Remove or unexport unused exports before pushing.
-- **kilocode_change check**: `bun run check-kilocode-change` from `packages/kilo-vscode/`. CI runs this — `kilocode_change` is a marker for upstream merge conflicts and must not appear in `packages/kilo-vscode/` or `packages/kilo-ui/` (these are entirely Kilo Code additions). Remove the markers before pushing.
+| Command               | Description                                      |
+| --------------------- | ------------------------------------------------ |
+| `bun run dev`         | Run dev server (from root)                       |
+| `bun turbo typecheck` | Type-check all packages (uses `tsgo`, not `tsc`) |
+| `bun run format`      | Run Prettier formatter                           |
+| `bun run lint`        | Run ESLint                                       |
 
-## Products
+### Package-specific commands
 
-All products are clients of the **CLI** (`packages/opencode/`), which contains the AI agent runtime, HTTP server, and session management. Each client spawns or connects to a `kilo serve` process and communicates via HTTP + SSE using `@kilocode/sdk`.
+**packages/opencode/**:
 
-| Product                | Package                 | Description                                                                                                                                                                          |
-| ---------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Kilo CLI               | `packages/opencode/`    | Core engine. TUI, `kilo run`, `kilo serve`, `kilo web`. Fork of upstream OpenCode.                                                                                                   |
-| Kilo VS Code Extension | `packages/kilo-vscode/` | VS Code extension. Bundles the CLI binary, spawns `kilo serve` as a child process. Includes the **Agent Manager** — a multi-session orchestration panel with git worktree isolation. |
-| OpenCode Desktop       | `packages/desktop/`     | Standalone Tauri native app. Bundles CLI as sidecar. Single-session UI. Unrelated to the VS Code extension. Not actively maintained — synced from upstream fork.                     |
-| OpenCode Web           | `packages/app/`         | Shared SolidJS frontend used by both the desktop app and `kilo web` CLI command. Not actively maintained — synced from upstream fork.                                                |
+- `bun run dev` (runs `bun run --conditions=browser ./src/index.ts`)
+- `bun run typecheck` (runs `tsgo --noEmit`)
+- `bun test` (all tests, timeout 30s)
+- `bun test test/tool/tool.test.ts` (single test file)
 
-**Agent Manager** refers to a feature inside `packages/kilo-vscode/` (extension code in `src/agent-manager/`, webview in `webview-ui/agent-manager/`). It is not a standalone product. See the extension's `AGENTS.md` for details.
+**packages/kilo-vscode/**:
 
-## Monorepo Structure
+- `bun run compile` (typecheck + lint + build)
+- `bun run watch` (watch mode)
+- `bun run test` (run tests)
+- `bun run lint` / `bun run format`
+- `bun script/local-bin.ts` (build CLI binary)
 
-Turborepo + Bun workspaces. The packages you'll work with most:
+## Import Aliases
 
-| Package                    | Name                       | Purpose                                                                                    |
-| -------------------------- | -------------------------- | ------------------------------------------------------------------------------------------ |
-| `packages/opencode/`       | `@kilocode/cli`            | Core CLI -- agents, tools, sessions, server, TUI. This is where most work happens.         |
-| `packages/sdk/js/`         | `@kilocode/sdk`            | Auto-generated TypeScript SDK (client for the server API). Do not edit `src/gen/` by hand. |
-| `packages/kilo-vscode/`    | `kilo-code`                | VS Code extension with sidebar chat + Agent Manager. See its own `AGENTS.md` for details.  |
-| `packages/kilo-gateway/`   | `@kilocode/kilo-gateway`   | Kilo auth, provider routing, API integration                                               |
-| `packages/kilo-telemetry/` | `@kilocode/kilo-telemetry` | PostHog analytics + OpenTelemetry                                                          |
-| `packages/kilo-i18n/`      | `@kilocode/kilo-i18n`      | Internationalization / translations                                                        |
-| `packages/kilo-ui/`        | `@kilocode/kilo-ui`        | SolidJS component library shared by the extension webview and `packages/app/`              |
-| `packages/app/`            | `@opencode-ai/app`         | Shared SolidJS web UI for desktop app and `kilo web`                                       |
-| `packages/desktop/`        | `@opencode-ai/desktop`     | Tauri desktop app shell                                                                    |
-| `packages/util/`           | `@opencode-ai/util`        | Shared utilities (error, path, retry, slug, etc.)                                          |
-| `packages/plugin/`         | `@kilocode/plugin`         | Plugin/tool interface definitions                                                          |
+- `@/*` maps to `./src/*`
+- `@tui/*` maps to `./src/cli/cmd/tui/*`
 
-## Style Guide
+## Code Style Guidelines
 
-- Keep things in one function unless composable or reusable
-- Avoid unnecessary destructuring. Instead of `const { a, b } = obj`, use `obj.a` and `obj.b` to preserve context
-- Avoid `try`/`catch` where possible
-- Avoid using the `any` type
-- Prefer single word variable names where possible
-- Use Bun APIs when possible, like `Bun.file()`
-- Rely on type inference when possible; avoid explicit type annotations or interfaces unless necessary for exports or clarity
+### Naming (MANDATORY)
 
-### Avoid let statements
+- Use **single word names** by default: `pid`, `cfg`, `err`, `opts`, `dir`, `state`
+- Multi-word names only when single word is unclear
+- Good: `const foo = condition ? 1 : 2`
+- Bad: `const inputPID`, `existingClient`
 
-We don't like `let` statements, especially combined with if/else statements.
-Prefer `const`.
+### Variables and Control Flow
 
-Good:
-
-### Naming Enforcement (Read This)
-
-THIS RULE IS MANDATORY FOR AGENT WRITTEN CODE.
-
-- Use single word names by default for new locals, params, and helper functions.
-- Multi-word names are allowed only when a single word would be unclear or ambiguous.
-- Do not introduce new camelCase compounds when a short single-word alternative is clear.
-- Before finishing edits, review touched lines and shorten newly introduced identifiers where possible.
-- Good short names to prefer: `pid`, `cfg`, `err`, `opts`, `dir`, `root`, `child`, `state`, `timeout`.
-- Examples to avoid unless truly required: `inputPID`, `existingClient`, `connectTimeout`, `workerPath`.
+- Prefer `const` over `let`; use ternary or early returns
+- Avoid `else` statements; use early returns
+- Avoid `try`/`catch` where possible; if needed, never leave catch block empty
 
 ```ts
+// Good
 const foo = condition ? 1 : 2
-```
 
-Bad:
-
-```ts
-let foo
-
-if (condition) foo = 1
-else foo = 2
-```
-
-### Avoid else statements
-
-Prefer early returns or using an `iife` to avoid else statements.
-
-Good:
-
-```ts
 function foo() {
   if (condition) return 1
   return 2
 }
-```
 
-Bad:
-
-```ts
-function foo() {
-  if (condition) return 1
-  else return 2
-}
-```
-
-### No empty catch blocks
-
-Never leave a `catch` block empty. An empty `catch` silently swallows errors and hides bugs. If you're tempted to write one, ask yourself:
-
-1. Is the `try`/`catch` even needed? (prefer removing it)
-2. Should the error be handled explicitly? (recover, retry, rethrow)
-3. At minimum, log it so failures are visible
-
-Good:
-
-```ts
 try {
   await save(data)
 } catch (err) {
@@ -129,97 +68,120 @@ try {
 }
 ```
 
-Bad:
+### Imports
+
+- Use named exports unless default is explicit
+- Group imports: external → internal → relative
+- ESLint enforces: camelCase/PascalCase for imports
+
+### Types
+
+- Avoid `any` type
+- Rely on type inference; avoid explicit annotations unless needed for exports
+- Use Zod schemas for input validation
+- Use `z.infer<typeof Schema>` for type extraction
+
+### Formatting
+
+- Semicolons required
+- No trailing commas
+- Print width: 120 characters (from root prettier config)
+- No padding in markdown table cells
+
+### Other Rules
+
+- Avoid unnecessary destructuring: use `obj.a` instead of `const { a } = obj`
+- Use Bun APIs when possible: `Bun.file()`
+- Keep things in one function unless composable/reusable
+- ESLint enforces: curly braces, strict equality (`eqeqeq`), max 3000 lines per file
+
+## Key Patterns (packages/opencode)
+
+### Namespace Modules
+
+Code is organized as TypeScript namespaces, not classes:
 
 ```ts
-try {
-  await save(data)
-} catch {}
+export namespace Session {
+  export const Info = z.object({ ... })
+  export type Info = z.infer<typeof Info>
+  export const create = fn(z.object({ ... }), async (input) => { ... })
+}
 ```
 
-### Prefer single word naming
+### Function Wrapping
 
-Try your best to find a single word name for your variables, functions, etc.
-Only use multiple words if you cannot.
+- **`fn(schema, callback)`** — wraps functions with Zod input validation
+- **`Tool.define(id, init)`** — tool definition pattern
+- **`BusEvent.define(type, schema)`** — pub/sub events
+- **`NamedError.create(name, schema)`** — structured errors with Zod schemas
 
-Good:
+### Lazy Singleton
 
 ```ts
-const foo = 1
-const bar = 2
-const baz = 3
+const state = Instance.state(async () => ({ ... }))
+// later: (await state()).someValue
 ```
 
-Bad:
+### Logging
 
 ```ts
-const fooBar = 1
-const barBaz = 2
-const bazFoo = 3
+const log = Log.create({ service: "name" })
+```
+
+### IIFE Pattern
+
+Use `iife()` to avoid `let` statements per style guide.
+
+### Error Handling
+
+Prefer `NamedError.create()` over throwing raw errors:
+
+```ts
+export const MyError = NamedError.create("MyError", z.object({ message: z.string() }))
+
+throw MyError.create({ message: "something went wrong" })
 ```
 
 ## Testing
 
-You MUST avoid using `mocks` as much as possible.
-Tests MUST test actual implementation, do not duplicate logic into a test.
+- **Avoid mocks** — test actual implementation
+- Don't duplicate logic in tests
+- Use `--timeout 30000` flag if tests may take longer
 
 ## Commit Conventions
 
-[Conventional Commits](https://www.conventionalcommits.org/) with scopes matching packages: `vscode`, `cli`, `agent-manager`, `sdk`, `ui`, `i18n`, `kilo-docs`, `gateway`, `telemetry`, `desktop`. Omit scope when spanning multiple packages.
+[Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `refactor:`, etc.
+
+- Scopes: `vscode`, `cli`, `agent-manager`, `sdk`, `ui`, `i18n`, `gateway`, `telemetry`
+- Run `bun run format` before committing
 
 ## Fork Merge Process
 
 Kilo CLI is a fork of [opencode](https://github.com/anomalyco/opencode).
 
-### Minimizing Merge Conflicts
+- Place Kilo-specific code in `packages/opencode/src/kilocode/` or `packages/kilo-gateway/`
+- Mark shared-code changes with `// kilocode_change` comments
+- Don't use markers in files with `kilocode` in the path
 
-We regularly merge upstream changes from opencode. To minimize merge conflicts and keep the sync process smooth:
+## VS Code Extension (packages/kilo-vscode)
 
-1. **Prefer `kilocode` directories** - Place Kilo-specific code in dedicated directories whenever possible:
-   - `packages/opencode/src/kilocode/` - Kilo-specific source code
-   - `packages/opencode/test/kilocode/` - Kilo-specific tests
-   - `packages/kilo-gateway/` - The Kilo Gateway package
+- VSCode commands must use `kilo-code.new.` prefix
+- View IDs must use `kilo-code.new.` prefix, except sidebar uses `kilo-code.SidebarProvider`
+- Max file sizes enforced by tests — do not raise caps
+- Webview uses **SolidJS** (not React) with `@kilocode/kilo-ui` components
+- Import kilo-ui via deep subpaths: `import { Button } from "@kilocode/kilo-ui/button"`
+- Use `data-component` and `data-slot` attributes for kilo-ui styling
+- Debug output must be prepended with `[Kilo New]`
 
-2. **Minimize changes to shared files** - When you must modify files that exist in upstream opencode, keep changes as small and isolated as possible.
+## Storage
 
-3. **Use `kilocode_change` markers** - When modifying shared code, mark your changes with `kilocode_change` comments so they can be easily identified during merges.
-   Do not use these markers in files within directories with kilo in the name
+Filesystem-based JSON, not a database. Data lives in `~/.local/share/kilo/storage/`.
 
-4. **Avoid restructuring upstream code** - Don't refactor or reorganize code that comes from opencode unless absolutely necessary.
+## Server (Hono)
 
-The goal is to keep our diff from upstream as small as possible, making regular merges straightforward and reducing the risk of conflicts.
+Hono-based HTTP server with OpenAPI spec generation. SSE for real-time events.
 
-### Kilocode Change Markers
+## TUI
 
-To minimize merge conflicts when syncing with upstream, mark Kilo Code-specific changes in shared code with `kilocode_change` comments.
-
-**Single line:**
-
-```typescript
-const value = 42 // kilocode_change
-```
-
-**Multi-line:**
-
-```typescript
-// kilocode_change start
-const foo = 1
-const bar = 2
-// kilocode_change end
-```
-
-**New files:**
-
-```typescript
-// kilocode_change - new file
-```
-
-#### When markers are NOT needed
-
-Code in these paths is Kilo Code-specific and does NOT need `kilocode_change` markers:
-
-- `packages/opencode/src/kilocode/` - All files in this directory
-- `packages/opencode/test/kilocode/` - All test files for kilocode
-- Any other path containing `kilocode` in filename or directory name
-
-These paths are entirely Kilo Code additions and won't conflict with upstream.
+Built with **SolidJS + OpenTUI** (`@opentui/solid`) — a terminal UI framework. JSX renders to terminal elements like `<box>`, `<text>`, `<scrollbox>`.

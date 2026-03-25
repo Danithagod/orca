@@ -812,6 +812,45 @@ export type EventCommandExecuted = {
   }
 }
 
+export type Pty = {
+  id: string
+  title: string
+  command: string
+  args: Array<string>
+  cwd: string
+  status: "running" | "exited"
+  pid: number
+}
+
+export type EventPtyCreated = {
+  type: "pty.created"
+  properties: {
+    info: Pty
+  }
+}
+
+export type EventPtyUpdated = {
+  type: "pty.updated"
+  properties: {
+    info: Pty
+  }
+}
+
+export type EventPtyExited = {
+  type: "pty.exited"
+  properties: {
+    id: string
+    exitCode: number
+  }
+}
+
+export type EventPtyDeleted = {
+  type: "pty.deleted"
+  properties: {
+    id: string
+  }
+}
+
 export type PermissionAction = "allow" | "deny" | "ask"
 
 export type PermissionRule = {
@@ -935,45 +974,6 @@ export type EventWorkspaceFailed = {
   }
 }
 
-export type Pty = {
-  id: string
-  title: string
-  command: string
-  args: Array<string>
-  cwd: string
-  status: "running" | "exited"
-  pid: number
-}
-
-export type EventPtyCreated = {
-  type: "pty.created"
-  properties: {
-    info: Pty
-  }
-}
-
-export type EventPtyUpdated = {
-  type: "pty.updated"
-  properties: {
-    info: Pty
-  }
-}
-
-export type EventPtyExited = {
-  type: "pty.exited"
-  properties: {
-    id: string
-    exitCode: number
-  }
-}
-
-export type EventPtyDeleted = {
-  type: "pty.deleted"
-  properties: {
-    id: string
-  }
-}
-
 export type EventWorktreeReady = {
   type: "worktree.ready"
   properties: {
@@ -1022,6 +1022,10 @@ export type Event =
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventCommandExecuted
+  | EventPtyCreated
+  | EventPtyUpdated
+  | EventPtyExited
+  | EventPtyDeleted
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
@@ -1032,10 +1036,6 @@ export type Event =
   | EventVcsBranchUpdated
   | EventWorkspaceReady
   | EventWorkspaceFailed
-  | EventPtyCreated
-  | EventPtyUpdated
-  | EventPtyExited
-  | EventPtyDeleted
   | EventWorktreeReady
   | EventWorktreeFailed
 
@@ -1050,7 +1050,7 @@ export type GlobalEvent = {
 export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
 
 /**
- * Server configuration for kilo serve and web commands
+ * Server configuration for orca serve and web commands
  */
 export type ServerConfig = {
   /**
@@ -1351,7 +1351,7 @@ export type Config = {
   logLevel?: LogLevel
   server?: ServerConfig
   /**
-   * Command configuration, see https://kilo.ai/docs/commands
+   * Command configuration, see https://orca.ai/docs/commands
    */
   command?: {
     [key: string]: {
@@ -1425,7 +1425,7 @@ export type Config = {
     [key: string]: AgentConfig | undefined
   }
   /**
-   * Agent configuration, see https://kilo.ai/docs/agents
+   * Agent configuration, see https://orca.ai/docs/agents
    */
   agent?: {
     plan?: AgentConfig
@@ -2366,6 +2366,42 @@ export type PtyUpdateResponses = {
 }
 
 export type PtyUpdateResponse = PtyUpdateResponses[keyof PtyUpdateResponses]
+
+export type PtyInterruptData = {
+  body?: {
+    forceAfter?: number
+  }
+  path: {
+    ptyID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/pty/{ptyID}/interrupt"
+}
+
+export type PtyInterruptErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type PtyInterruptError = PtyInterruptErrors[keyof PtyInterruptErrors]
+
+export type PtyInterruptResponses = {
+  /**
+   * Interrupt signal sent
+   */
+  200: boolean
+}
+
+export type PtyInterruptResponse = PtyInterruptResponses[keyof PtyInterruptResponses]
 
 export type PtyConnectData = {
   body?: never

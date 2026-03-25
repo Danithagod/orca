@@ -1,4 +1,4 @@
-// kilocode_change - use Kilo-specific tips component
+// kilocode_change - Orca tips component
 export { Tips } from "@/kilocode/components/tips"
 
 import { For } from "solid-js"
@@ -39,8 +39,11 @@ function _Tips() {
 
   return (
     <box flexDirection="row" maxWidth="100%">
-      <text flexShrink={0} style={{ fg: theme.warning }}>
-        ● Tip{" "}
+      <text flexShrink={0} style={{ fg: theme.accent }}>
+        ◉{" "}
+      </text>
+      <text flexShrink={0} style={{ fg: theme.primary }}>
+        Tip{" "}
       </text>
       <text flexShrink={1}>
         <For each={parts}>

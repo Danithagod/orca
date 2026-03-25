@@ -15,6 +15,7 @@ import { existsSync } from "fs"
 import { git } from "../util/git"
 import { Glob } from "../util/glob"
 import { which } from "../util/which"
+import { StartupTrace } from "@/startup/trace"
 
 export namespace Project {
   const log = Log.create({ service: "project" })
@@ -90,187 +91,194 @@ export namespace Project {
 
   export async function fromDirectory(directory: string) {
     log.info("fromDirectory", { directory })
+    return StartupTrace.time("project.fromDirectory", {
+      extra: { directory },
+      fn: async () => {
+        const data = await iife(async () => {
+          const matches = Filesystem.up({ targets: [".git"], start: directory })
+          const dotgit = await matches.next().then((x) => x.value)
+          await matches.return()
+          if (dotgit) {
+            let sandbox = path.dirname(dotgit)
 
-    const data = await iife(async () => {
-      const matches = Filesystem.up({ targets: [".git"], start: directory })
-      const dotgit = await matches.next().then((x) => x.value)
-      await matches.return()
-      if (dotgit) {
-        let sandbox = path.dirname(dotgit)
+            const gitBinary = which("git")
 
-        const gitBinary = which("git")
+            let id = await Filesystem.readText(path.join(dotgit, "opencode"))
+              .then((x) => x.trim())
+              .catch(() => undefined)
 
-        // cached id calculation
-        let id = await Filesystem.readText(path.join(dotgit, "opencode"))
-          .then((x) => x.trim())
-          .catch(() => undefined)
+            if (!gitBinary) {
+              return {
+                id: id ?? "global",
+                worktree: sandbox,
+                sandbox: sandbox,
+                vcs: Info.shape.vcs.parse(Flag.KILO_FAKE_VCS),
+              }
+            }
 
-        if (!gitBinary) {
-          return {
-            id: id ?? "global",
-            worktree: sandbox,
-            sandbox: sandbox,
-            vcs: Info.shape.vcs.parse(Flag.KILO_FAKE_VCS),
-          }
-        }
+            if (!id) {
+              const roots = await git(["rev-list", "--max-parents=0", "--all"], {
+                cwd: sandbox,
+              })
+                .then(async (result) =>
+                  (await result.text())
+                    .split("\n")
+                    .filter(Boolean)
+                    .map((x) => x.trim())
+                    .toSorted(),
+                )
+                .catch(() => undefined)
 
-        // generate id from root commit
-        if (!id) {
-          const roots = await git(["rev-list", "--max-parents=0", "--all"], {
-            cwd: sandbox,
-          })
-            .then(async (result) =>
-              (await result.text())
-                .split("\n")
-                .filter(Boolean)
-                .map((x) => x.trim())
-                .toSorted(),
-            )
-            .catch(() => undefined)
+              if (!roots) {
+                return {
+                  id: "global",
+                  worktree: sandbox,
+                  sandbox: sandbox,
+                  vcs: Info.shape.vcs.parse(Flag.KILO_FAKE_VCS),
+                }
+              }
 
-          if (!roots) {
+              id = roots[0]
+              if (id) {
+                await Filesystem.write(path.join(dotgit, "opencode"), id).catch(() => undefined)
+              }
+            }
+
+            if (!id) {
+              return {
+                id: "global",
+                worktree: sandbox,
+                sandbox: sandbox,
+                vcs: "git",
+              }
+            }
+
+            const top = await git(["rev-parse", "--show-toplevel"], {
+              cwd: sandbox,
+            })
+              .then(async (result) => gitpath(sandbox, await result.text()))
+              .catch(() => undefined)
+
+            if (!top) {
+              return {
+                id,
+                sandbox,
+                worktree: sandbox,
+                vcs: Info.shape.vcs.parse(Flag.KILO_FAKE_VCS),
+              }
+            }
+
+            sandbox = top
+
+            const worktree = await git(["rev-parse", "--git-common-dir"], {
+              cwd: sandbox,
+            })
+              .then(async (result) => {
+                const common = gitpath(sandbox, await result.text())
+                return common === sandbox ? sandbox : path.dirname(common)
+              })
+              .catch(() => undefined)
+
+            if (!worktree) {
+              return {
+                id,
+                sandbox,
+                worktree: sandbox,
+                vcs: Info.shape.vcs.parse(Flag.KILO_FAKE_VCS),
+              }
+            }
+
             return {
-              id: "global",
-              worktree: sandbox,
-              sandbox: sandbox,
-              vcs: Info.shape.vcs.parse(Flag.KILO_FAKE_VCS),
+              id,
+              sandbox,
+              worktree,
+              vcs: "git",
             }
           }
 
-          id = roots[0]
-          if (id) {
-            await Filesystem.write(path.join(dotgit, "opencode"), id).catch(() => undefined)
-          }
-        }
-
-        if (!id) {
           return {
             id: "global",
-            worktree: sandbox,
-            sandbox: sandbox,
-            vcs: "git",
-          }
-        }
-
-        const top = await git(["rev-parse", "--show-toplevel"], {
-          cwd: sandbox,
-        })
-          .then(async (result) => gitpath(sandbox, await result.text()))
-          .catch(() => undefined)
-
-        if (!top) {
-          return {
-            id,
-            sandbox,
-            worktree: sandbox,
+            worktree: "/",
+            sandbox: "/",
             vcs: Info.shape.vcs.parse(Flag.KILO_FAKE_VCS),
           }
-        }
-
-        sandbox = top
-
-        const worktree = await git(["rev-parse", "--git-common-dir"], {
-          cwd: sandbox,
         })
-          .then(async (result) => {
-            const common = gitpath(sandbox, await result.text())
-            // Avoid going to parent of sandbox when git-common-dir is empty.
-            return common === sandbox ? sandbox : path.dirname(common)
-          })
-          .catch(() => undefined)
 
-        if (!worktree) {
-          return {
-            id,
-            sandbox,
-            worktree: sandbox,
-            vcs: Info.shape.vcs.parse(Flag.KILO_FAKE_VCS),
+        const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, data.id)).get())
+        const existing = await iife(async () => {
+          if (row) return fromRow(row)
+          const fresh: Info = {
+            id: data.id,
+            worktree: data.worktree,
+            vcs: data.vcs as Info["vcs"],
+            sandboxes: [],
+            time: {
+              created: Date.now(),
+              updated: Date.now(),
+            },
           }
+          if (data.id !== "global") {
+            await migrateFromGlobal(data.id, data.worktree)
+          }
+          return fresh
+        })
+
+        if (Flag.KILO_EXPERIMENTAL_ICON_DISCOVERY) discover(existing)
+
+        const result: Info = {
+          ...existing,
+          worktree: data.worktree,
+          vcs: data.vcs as Info["vcs"],
+          time: {
+            ...existing.time,
+            updated: Date.now(),
+          },
         }
-
-        return {
-          id,
-          sandbox,
-          worktree,
-          vcs: "git",
+        if (data.sandbox !== result.worktree && !result.sandboxes.includes(data.sandbox))
+          result.sandboxes.push(data.sandbox)
+        result.sandboxes = result.sandboxes.filter((x) => existsSync(x))
+        const insert = {
+          id: result.id,
+          worktree: result.worktree,
+          vcs: result.vcs ?? null,
+          name: result.name,
+          icon_url: result.icon?.url,
+          icon_color: result.icon?.color,
+          time_created: result.time.created,
+          time_updated: result.time.updated,
+          time_initialized: result.time.initialized,
+          sandboxes: result.sandboxes,
+          commands: result.commands,
         }
-      }
-
-      return {
-        id: "global",
-        worktree: "/",
-        sandbox: "/",
-        vcs: Info.shape.vcs.parse(Flag.KILO_FAKE_VCS),
-      }
-    })
-
-    const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, data.id)).get())
-    const existing = await iife(async () => {
-      if (row) return fromRow(row)
-      const fresh: Info = {
-        id: data.id,
-        worktree: data.worktree,
-        vcs: data.vcs as Info["vcs"],
-        sandboxes: [],
-        time: {
-          created: Date.now(),
-          updated: Date.now(),
-        },
-      }
-      if (data.id !== "global") {
-        await migrateFromGlobal(data.id, data.worktree)
-      }
-      return fresh
-    })
-
-    if (Flag.KILO_EXPERIMENTAL_ICON_DISCOVERY) discover(existing)
-
-    const result: Info = {
-      ...existing,
-      worktree: data.worktree,
-      vcs: data.vcs as Info["vcs"],
-      time: {
-        ...existing.time,
-        updated: Date.now(),
-      },
-    }
-    if (data.sandbox !== result.worktree && !result.sandboxes.includes(data.sandbox))
-      result.sandboxes.push(data.sandbox)
-    result.sandboxes = result.sandboxes.filter((x) => existsSync(x))
-    const insert = {
-      id: result.id,
-      worktree: result.worktree,
-      vcs: result.vcs ?? null,
-      name: result.name,
-      icon_url: result.icon?.url,
-      icon_color: result.icon?.color,
-      time_created: result.time.created,
-      time_updated: result.time.updated,
-      time_initialized: result.time.initialized,
-      sandboxes: result.sandboxes,
-      commands: result.commands,
-    }
-    const updateSet = {
-      worktree: result.worktree,
-      vcs: result.vcs ?? null,
-      name: result.name,
-      icon_url: result.icon?.url,
-      icon_color: result.icon?.color,
-      time_updated: result.time.updated,
-      time_initialized: result.time.initialized,
-      sandboxes: result.sandboxes,
-      commands: result.commands,
-    }
-    Database.use((db) =>
-      db.insert(ProjectTable).values(insert).onConflictDoUpdate({ target: ProjectTable.id, set: updateSet }).run(),
-    )
-    GlobalBus.emit("event", {
-      payload: {
-        type: Event.Updated.type,
-        properties: result,
+        const updateSet = {
+          worktree: result.worktree,
+          vcs: result.vcs ?? null,
+          name: result.name,
+          icon_url: result.icon?.url,
+          icon_color: result.icon?.color,
+          time_updated: result.time.updated,
+          time_initialized: result.time.initialized,
+          sandboxes: result.sandboxes,
+          commands: result.commands,
+        }
+        Database.use((db) =>
+          db.insert(ProjectTable).values(insert).onConflictDoUpdate({ target: ProjectTable.id, set: updateSet }).run(),
+        )
+        GlobalBus.emit("event", {
+          payload: {
+            type: Event.Updated.type,
+            properties: result,
+          },
+        })
+        StartupTrace.info("project.fromDirectory.result", {
+          directory,
+          projectID: result.id,
+          sandboxes: result.sandboxes.length,
+          worktree: result.worktree,
+        })
+        return { project: result, sandbox: data.sandbox }
       },
     })
-    return { project: result, sandbox: data.sandbox }
   }
 
   export async function discover(input: Info) {

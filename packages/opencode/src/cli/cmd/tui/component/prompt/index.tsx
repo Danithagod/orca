@@ -1,4 +1,4 @@
-import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, t, dim, fg } from "@opentui/core"
+import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, t, dim, fg, RGBA, TextAttributes } from "@opentui/core"
 import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, on, Show, Switch, Match } from "solid-js"
 import "opentui-spinner/solid"
 import path from "path"
@@ -35,6 +35,7 @@ import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
 import { shouldSummarize as shouldPasteSummary } from "@/kilocode/paste-summary"
+import { OrcaPanel, OrcaStatusBadge } from "../orca-ui"
 
 export type PromptProps = {
   sessionID?: string
@@ -138,6 +139,11 @@ export function Prompt(props: PromptProps) {
     extmarkToPartIndex: new Map(),
     interrupt: 0,
     exitPress: 0, // kilocode_change
+  })
+
+  // Sync mode to local context
+  createEffect(() => {
+    local.setPromptMode(store.mode)
   })
 
   createEffect(
@@ -312,7 +318,7 @@ export function Prompt(props: PromptProps) {
                     ...part.source,
                     start: newStart,
                     end: newEnd,
-                  },
+                    },
                 }
               }
 
@@ -764,20 +770,27 @@ export function Prompt(props: PromptProps) {
     return {
       frames: createFrames({
         color,
-        style: "blocks",
+        style: "biowave",
         inactiveFactor: 0.6,
         // enableFading: false,
         minAlpha: 0.3,
       }),
       color: createColors({
         color,
-        style: "blocks",
+        style: "biowave",
         inactiveFactor: 0.6,
         // enableFading: false,
         minAlpha: 0.3,
       }),
     }
   })
+
+  // Animation for agent transition
+  const [transitionActive, setTransitionActive] = createSignal(false)
+  createEffect(on(() => local.agent.current().name, () => {
+    setTransitionActive(true)
+    setTimeout(() => setTransitionActive(false), 300)
+  }, { defer: true }))
 
   return (
     <>
@@ -802,21 +815,16 @@ export function Prompt(props: PromptProps) {
         promptPartTypeId={() => promptPartTypeId}
       />
       <box ref={(r) => (anchor = r)} visible={props.visible !== false}>
-        <box
-          border={["left"]}
+        <OrcaPanel 
+          borderStyle="rounded" 
+          padding={1} 
           borderColor={highlight()}
-          customBorderChars={{
-            ...EmptyBorder,
-            vertical: "┃",
-            bottomLeft: "╹",
-          }}
+          bgColor={transitionActive() ? "element" : "panel"}
         >
           <box
-            paddingLeft={2}
-            paddingRight={2}
-            paddingTop={1}
+            paddingLeft={1}
+            paddingRight={1}
             flexShrink={0}
-            backgroundColor={theme.backgroundElement}
             flexGrow={1}
           >
             <textarea
@@ -1012,58 +1020,46 @@ export function Prompt(props: PromptProps) {
                 }, 0)
               }}
               onMouseDown={(r: MouseEvent) => r.target?.focus()}
-              focusedBackgroundColor={theme.backgroundElement}
+              focusedBackgroundColor={transitionActive() ? theme.backgroundElement : theme.backgroundPanel}
               cursorColor={theme.text}
               syntaxStyle={syntax()}
             />
-            <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
-              <text fg={highlight()}>
-                {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}
-              </text>
+            <box flexDirection="row" flexShrink={0} paddingTop={0.5} gap={2} alignItems="center">
+              <box flexDirection="row" gap={1} alignItems="center">
+                <text fg={highlight()} attributes={TextAttributes.BOLD}>
+                  {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}
+                </text>
+              </box>
+              
               <Show when={store.mode === "normal"}>
-                <box flexDirection="row" gap={1}>
+                <box flexDirection="row" gap={1} alignItems="center">
                   <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
                     {local.model.parsed().model}
                   </text>
-                  <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                  <text fg={theme.textMuted} attributes={TextAttributes.ITALIC}>
+                    ({local.model.parsed().provider})
+                  </text>
                   <Show when={showVariant()}>
                     <text fg={theme.textMuted}>·</text>
-                    <text>
-                      <span style={{ fg: theme.warning, bold: true }}>{local.model.variant.current()}</span>
-                    </text>
+                    <box backgroundColor={theme.warning} paddingLeft={0.5} paddingRight={0.5}>
+                      <text fg={theme.background} attributes={TextAttributes.BOLD}>
+                        {local.model.variant.current()}
+                      </text>
+                    </box>
                   </Show>
                 </box>
               </Show>
+
+              <box flexGrow={1} />
+              
+              <Show when={Object.values(sync.data.mcp).some(s => s.status !== "connected")}>
+                <OrcaStatusBadge status="warning" label="offline" />
+              </Show>
             </box>
           </box>
-        </box>
-        <box
-          height={1}
-          border={["left"]}
-          borderColor={highlight()}
-          customBorderChars={{
-            ...EmptyBorder,
-            vertical: theme.backgroundElement.a !== 0 ? "╹" : " ",
-          }}
-        >
-          <box
-            height={1}
-            border={["bottom"]}
-            borderColor={theme.backgroundElement}
-            customBorderChars={
-              theme.backgroundElement.a !== 0
-                ? {
-                    ...EmptyBorder,
-                    horizontal: "▀",
-                  }
-                : {
-                    ...EmptyBorder,
-                    horizontal: " ",
-                  }
-            }
-          />
-        </box>
-        <box flexDirection="row" justifyContent="space-between">
+        </OrcaPanel>
+        
+        <box flexDirection="row" justifyContent="space-between" marginTop={0.5}>
           <Show when={status().type !== "idle"} fallback={<text />}>
             <box
               flexDirection="row"

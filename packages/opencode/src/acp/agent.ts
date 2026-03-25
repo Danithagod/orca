@@ -532,9 +532,9 @@ export namespace ACP {
       if (params.clientCapabilities?._meta?.["terminal-auth"] === true) {
         authMethod._meta = {
           "terminal-auth": {
-            command: "kilo",
+            command: "orca",
             args: ["auth", "login"],
-            label: "Kilo Login", // kilocode_change
+            label: "Orca Login", // kilocode_change
           },
         }
       }
@@ -559,7 +559,7 @@ export namespace ACP {
         },
         authMethods: [authMethod],
         agentInfo: {
-          name: "Kilo", // kilocode_change
+          name: "Orca", // kilocode_change
           version: Installation.VERSION,
         },
       }

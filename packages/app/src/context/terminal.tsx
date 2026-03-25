@@ -2,14 +2,16 @@ import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { batch, createEffect, createMemo, createRoot, on, onCleanup } from "solid-js"
 import { useParams } from "@solidjs/router"
-import { useSDK } from "./sdk"
+import { useGlobalSDK } from "./global-sdk"
 import type { Platform } from "./platform"
+import { decode64 } from "@/utils/base64"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
 
 export type LocalPTY = {
   id: string
   title: string
   titleNumber: number
+  status?: "running" | "exited"
   rows?: number
   cols?: number
   buffer?: string
@@ -68,8 +70,18 @@ export function clearWorkspaceTerminals(dir: string, sessionIDs?: string[], plat
   }
 }
 
-function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: string, legacySessionID?: string) {
+function createWorkspaceTerminalSession(
+  globalSDK: ReturnType<typeof useGlobalSDK>,
+  dir: string,
+  legacySessionID?: string,
+) {
   const legacy = getLegacyTerminalStorageKeys(dir, legacySessionID)
+  const client = globalSDK.createClient({
+    directory: dir,
+    throwOnError: true,
+  })
+  const input = new Map<string, string[]>()
+  const sub = new Map<string, Set<(data: string) => void>>()
 
   const numberFromTitle = (title: string) => {
     const match = title.match(/^Terminal (\d+)$/)
@@ -111,19 +123,16 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
     const all = store.all
     const index = all.findIndex((x) => x.id === id)
     if (index === -1) return
-    const active = store.active === id ? (index === 0 ? all[1]?.id : all[0]?.id) : store.active
-    batch(() => {
-      setStore("active", active)
-      setStore(
-        "all",
-        produce((draft) => {
-          draft.splice(index, 1)
-        }),
-      )
+    input.delete(id)
+    sub.delete(id)
+    setStore("all", index, (pty) => {
+      if (pty.status === "exited") return pty
+      return { ...pty, status: "exited" }
     })
   }
 
-  const unsub = sdk.event.on("pty.exited", (event: { properties: { id: string } }) => {
+  const unsub = globalSDK.event.on(dir, (event) => {
+    if (event.type !== "pty.exited") return
     removeExited(event.properties.id)
   })
   onCleanup(unsub)
@@ -138,21 +147,83 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
     setStore("all", (all) => {
       const next = all.map((pty) => {
         const direct = Number.isFinite(pty.titleNumber) && pty.titleNumber > 0 ? pty.titleNumber : undefined
-        if (direct !== undefined) return pty
+        const status = pty.status ?? "running"
+        if (direct !== undefined && pty.status === status) return pty
         const parsed = numberFromTitle(pty.title)
-        if (parsed === undefined) return pty
-        return { ...pty, titleNumber: parsed }
+        if (parsed === undefined) {
+          if (pty.status === status) return pty
+          return { ...pty, status }
+        }
+        return { ...pty, titleNumber: parsed, status }
       })
       if (next.every((pty, index) => pty === all[index])) return all
       return next
     })
   })
 
+  const write = (id: string, data: string) => {
+    if (!data) return
+    const set = sub.get(id)
+    if (set && set.size > 0) {
+      for (const item of set) item(data)
+      return
+    }
+    const next = input.get(id) ?? []
+    next.push(data)
+    input.set(id, next)
+  }
+
+  const subscribe = (id: string, fn: (data: string) => void) => {
+    const set = sub.get(id) ?? new Set<(data: string) => void>()
+    set.add(fn)
+    sub.set(id, set)
+
+    const queued = input.get(id)
+    if (queued?.length) {
+      input.delete(id)
+      for (const item of queued) fn(item)
+    }
+
+    return () => {
+      const current = sub.get(id)
+      if (!current) return
+      current.delete(fn)
+      if (current.size > 0) return
+      sub.delete(id)
+    }
+  }
+
+  const attach = (pty: { id: string; title?: string; status?: LocalPTY["status"] }) => {
+    const index = store.all.findIndex((item) => item.id === pty.id)
+    if (index >= 0) {
+      setStore("all", index, (item) => ({
+        ...item,
+        title: pty.title ?? item.title,
+        status: pty.status ?? item.status ?? "running",
+      }))
+      setStore("active", pty.id)
+      return pty.id
+    }
+
+    const title = pty.title ?? "Terminal"
+    const titleNumber = numberFromTitle(title) ?? pickNextTerminalNumber()
+    setStore("all", store.all.length, {
+      id: pty.id,
+      title,
+      titleNumber,
+      status: pty.status ?? "running",
+    })
+    setStore("active", pty.id)
+    return pty.id
+  }
+
   return {
     ready,
     all: createMemo(() => store.all),
     active: createMemo(() => store.active),
     clear() {
+      input.clear()
+      sub.clear()
       batch(() => {
         setStore("active", undefined)
         setStore("all", [])
@@ -161,30 +232,34 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
     new() {
       const nextNumber = pickNextTerminalNumber()
 
-      sdk.client.pty
+      return client.pty
         .create({ title: `Terminal ${nextNumber}` })
-        .then((pty: { data?: { id?: string; title?: string } }) => {
+        .then((pty: { data?: { id?: string; title?: string; status?: LocalPTY["status"] } }) => {
           const id = pty.data?.id
           if (!id) return
           const newTerminal = {
             id,
             title: pty.data?.title ?? "Terminal",
             titleNumber: nextNumber,
+            status: pty.data?.status ?? "running",
           }
           setStore("all", store.all.length, newTerminal)
           setStore("active", id)
+          return id
         })
         .catch((error: unknown) => {
           console.error("Failed to create terminal", error)
+          return undefined
         })
     },
+    attach,
     update(pty: Partial<LocalPTY> & { id: string }) {
       const index = store.all.findIndex((x) => x.id === pty.id)
       const previous = index >= 0 ? store.all[index] : undefined
       if (index >= 0) {
         setStore("all", index, (item) => ({ ...item, ...pty }))
       }
-      sdk.client.pty
+      client.pty
         .update({
           ptyID: pty.id,
           title: pty.title,
@@ -214,7 +289,7 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
       const index = store.all.findIndex((x) => x.id === id)
       const pty = store.all[index]
       if (!pty) return
-      const clone = await sdk.client.pty
+      const clone = await client.pty
         .create({
           title: pty.title,
         })
@@ -223,6 +298,8 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
           return undefined
         })
       if (!clone?.data) return
+      input.delete(pty.id)
+      sub.delete(pty.id)
 
       const active = store.active === pty.id
 
@@ -231,6 +308,7 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
           id: clone.data.id,
           title: clone.data.title ?? pty.title,
           titleNumber: pty.titleNumber,
+          status: clone.data.status ?? "running",
           // New PTY process, so start clean.
           buffer: undefined,
           cursor: undefined,
@@ -275,7 +353,10 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
         })
       }
 
-      await sdk.client.pty.remove({ ptyID: id }).catch((error: unknown) => {
+      input.delete(id)
+      sub.delete(id)
+
+      await client.pty.remove({ ptyID: id }).catch((error: unknown) => {
         console.error("Failed to close terminal", error)
       })
     },
@@ -289,6 +370,8 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
         }),
       )
     },
+    write,
+    subscribe,
   }
 }
 
@@ -296,9 +379,11 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
   name: "Terminal",
   gate: false,
   init: () => {
-    const sdk = useSDK()
+    const globalSDK = useGlobalSDK()
     const params = useParams()
     const cache = new Map<string, TerminalCacheEntry>()
+    const raw = createMemo(() => decode64(params.dir))
+    const [route, setRoute] = createStore({ resolved: "" })
 
     caches.add(cache)
     onCleanup(() => caches.delete(cache))
@@ -322,8 +407,32 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
       }
     }
 
+    createEffect(() => {
+      const dir = raw()
+      if (!params.dir || !dir) {
+        if (!route.resolved) return
+        setRoute("resolved", "")
+        return
+      }
+
+      const current = params.dir
+      globalSDK
+        .createClient({
+          directory: dir,
+          throwOnError: true,
+        })
+        .path.get()
+        .then((x) => {
+          if (params.dir !== current) return
+          setRoute("resolved", x.data?.directory ?? dir)
+        })
+        .catch(() => {
+          if (params.dir !== current) return
+          setRoute("resolved", dir)
+        })
+    })
+
     const loadWorkspace = (dir: string, legacySessionID?: string) => {
-      // Terminals are workspace-scoped so tabs persist while switching sessions in the same directory.
       const key = getWorkspaceTerminalCacheKey(dir)
       const existing = cache.get(key)
       if (existing) {
@@ -333,7 +442,7 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
       }
 
       const entry = createRoot((dispose) => ({
-        value: createWorkspaceTerminalSession(sdk, dir, legacySessionID),
+        value: createWorkspaceTerminalSession(globalSDK, dir, legacySessionID),
         dispose,
       }))
 
@@ -342,11 +451,27 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
       return entry.value
     }
 
-    const workspace = createMemo(() => loadWorkspace(params.dir!, params.id))
+    let workspace: ReturnType<typeof loadWorkspace> | undefined
+    let currentDir: string | undefined
+    let currentId: string | undefined
+
+    const getWorkspace = () => {
+      const dir = route.resolved
+      if (!dir) return
+      if (workspace && currentDir === dir && currentId === params.id) {
+        return workspace
+      }
+      if (dir) {
+        currentDir = dir
+        currentId = params.id
+      }
+      workspace = loadWorkspace(dir, params.id)
+      return workspace
+    }
 
     createEffect(
       on(
-        () => ({ dir: params.dir, id: params.id }),
+        () => ({ dir: route.resolved, id: params.id }),
         (next, prev) => {
           if (!prev?.dir) return
           if (next.dir === prev.dir && next.id === prev.id) return
@@ -358,19 +483,23 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
     )
 
     return {
-      ready: () => workspace().ready(),
-      all: () => workspace().all(),
-      active: () => workspace().active(),
-      new: () => workspace().new(),
-      update: (pty: Partial<LocalPTY> & { id: string }) => workspace().update(pty),
-      trim: (id: string) => workspace().trim(id),
-      trimAll: () => workspace().trimAll(),
-      clone: (id: string) => workspace().clone(id),
-      open: (id: string) => workspace().open(id),
-      close: (id: string) => workspace().close(id),
-      move: (id: string, to: number) => workspace().move(id, to),
-      next: () => workspace().next(),
-      previous: () => workspace().previous(),
+      directory: () => route.resolved,
+      ready: () => getWorkspace()?.ready() ?? false,
+      all: () => getWorkspace()?.all() ?? [],
+      active: () => getWorkspace()?.active(),
+      new: () => getWorkspace()?.new(),
+      attach: (pty: { id: string; title?: string }) => getWorkspace()?.attach(pty),
+      write: (id: string, data: string) => getWorkspace()?.write(id, data),
+      subscribe: (id: string, fn: (data: string) => void) => getWorkspace()?.subscribe(id, fn),
+      update: (pty: Partial<LocalPTY> & { id: string }) => getWorkspace()?.update(pty),
+      trim: (id: string) => getWorkspace()?.trim(id),
+      trimAll: () => getWorkspace()?.trimAll(),
+      clone: (id: string) => getWorkspace()?.clone(id),
+      open: (id: string) => getWorkspace()?.open(id),
+      close: (id: string) => getWorkspace()?.close(id),
+      move: (id: string, to: number) => getWorkspace()?.move(id, to),
+      next: () => getWorkspace()?.next(),
+      previous: () => getWorkspace()?.previous(),
     }
   },
 })

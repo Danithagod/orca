@@ -35,6 +35,7 @@ import type { ProjectMeta } from "./global-sync/types"
 import { SESSION_RECENT_LIMIT } from "./global-sync/types"
 import { sanitizeProject } from "./global-sync/utils"
 import { formatServerError } from "@/utils/server-errors"
+import { markStartup } from "@/utils/startup"
 
 type GlobalStore = {
   ready: boolean
@@ -196,6 +197,7 @@ function createGlobalSync() {
     }
 
     const limit = Math.max(store.limit + SESSION_RECENT_LIMIT, SESSION_RECENT_LIMIT)
+    const start = performance.now()
     const promise = loadRootSessionsWithFallback({
       directory,
       limit,
@@ -223,9 +225,35 @@ function createGlobalSync() {
         setStore("session", reconcile(sessions, { key: "id" }))
         cleanupDroppedSessionCaches(store, setStore, sessions, setSessionTodo)
         sessionMeta.set(directory, { limit })
+        markStartup({
+          sdk: globalSDK.client,
+          message: "bootstrap.directory.sessions.loaded",
+          extra: {
+            directory,
+            duration: Math.round(performance.now() - start),
+            count: nonArchived.length,
+            limit,
+            total: estimateRootSessionTotal({
+              count: nonArchived.length,
+              limit: x.limit,
+              limited: x.limited,
+            }),
+          },
+        })
       })
       .catch((err) => {
         console.error("Failed to load sessions", err)
+        markStartup({
+          sdk: globalSDK.client,
+          message: "bootstrap.directory.sessions.failed",
+          level: "error",
+          extra: {
+            directory,
+            duration: Math.round(performance.now() - start),
+            error: err instanceof Error ? err.message : String(err),
+            limit,
+          },
+        })
         const project = getFilename(directory)
         showToast({
           variant: "error",

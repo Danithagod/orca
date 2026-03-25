@@ -129,8 +129,26 @@ const WorkspaceHeader = (props: {
         openOnDblClick={false}
       />
     </Show>
-    <div class="flex items-center justify-center shrink-0 overflow-hidden w-0 opacity-0 transition-all duration-200 group-hover/workspace:w-3.5 group-hover/workspace:opacity-100 group-focus-within/workspace:w-3.5 group-focus-within/workspace:opacity-100">
-      <Icon name={props.open() ? "chevron-down" : "chevron-right"} size="small" class="text-icon-base" />
+        <div class="flex items-center justify-center shrink-0 ml-auto mr-1">
+      <div 
+        class="flex items-center w-7 h-4 rounded-full border border-border-weak-base transition-colors duration-200 relative px-0.5"
+        classList={{
+          "bg-surface-raised-base": !props.open(),
+          "bg-icon-interactive-base border-icon-interactive-base": props.open(),
+        }}
+      >
+        <div 
+          class="size-2.5 rounded-full bg-icon-invert-base transition-transform duration-200 flex items-center justify-center"
+          classList={{
+            "translate-x-0": !props.open(),
+            "translate-x-3": props.open(),
+          }}
+        >
+          <Show when={props.busy()}>
+            <Spinner class="size-[8px] text-icon-interactive-base" />
+          </Show>
+        </div>
+      </div>
     </div>
   </div>
 )
@@ -263,9 +281,10 @@ const WorkspaceSessionList = (props: {
       <SessionSkeleton />
     </Show>
     <For each={props.sessions()}>
-      {(session) => (
+      {(session, index) => (
         <SessionItem
           session={session}
+            index={index()}
           slug={props.slug()}
           mobile={props.mobile}
           children={props.children()}
@@ -495,9 +514,10 @@ export const LocalWorkspace = (props: {
           <SessionSkeleton />
         </Show>
         <For each={sessions()}>
-          {(session) => (
+          {(session, index) => (
             <SessionItem
               session={session}
+            index={index()}
               slug={slug()}
               mobile={props.mobile}
               children={children()}

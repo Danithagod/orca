@@ -50,6 +50,7 @@ import { Config } from "./config/config"
 import { Auth } from "./auth"
 // kilocode_change end
 import { DbCommand } from "./cli/cmd/db"
+import { OrchestrationCommand } from "./cli/cmd/orchestration"
 import path from "path"
 import { Global } from "./global"
 import { JsonMigration } from "./storage/json-migration"
@@ -74,7 +75,7 @@ process.on("SIGHUP", () => process.exit())
 
 let cli = yargs(hideBin(process.argv))
   .parserConfiguration({ "populate--": true })
-  .scriptName("kilo") // kilocode_change
+  .scriptName("orca") // kilocode_change
   .wrap(100)
   .help("help", "show help")
   .alias("help", "h")
@@ -133,7 +134,7 @@ let cli = yargs(hideBin(process.argv))
     Telemetry.trackCliStart()
     // kilocode_change end
 
-    const marker = path.join(Global.Path.data, "kilo.db")
+    const marker = path.join(Global.Path.data, "orca.db")
     if (!(await Filesystem.exists(marker))) {
       const tty = process.stderr.isTTY
       process.stderr.write("Performing one time database migration, may take a few minutes..." + EOL)
@@ -193,6 +194,7 @@ let cli = yargs(hideBin(process.argv))
   .command(PrCommand)
   .command(SessionCommand)
   .command(DbCommand)
+  .command(OrchestrationCommand)
 
 if (Installation.isLocal()) {
   cli = cli.command(WorkspaceServeCommand)

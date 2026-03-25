@@ -19,3 +19,46 @@ export const SplitBorder = {
     vertical: "┃",
   },
 }
+
+// kilocode_change start - Orca rounded corners
+export const OrcaBorder = {
+  rounded: {
+    ...EmptyBorder,
+    topLeft: "╭",
+    topRight: "╮",
+    bottomLeft: "╰",
+    bottomRight: "╯",
+    horizontal: "─",
+    vertical: "│",
+  },
+  solid: {
+    ...EmptyBorder,
+    topLeft: "┌",
+    topRight: "┐",
+    bottomLeft: "└",
+    bottomRight: "┘",
+    horizontal: "─",
+    vertical: "│",
+  },
+  double: {
+    ...EmptyBorder,
+    topLeft: "╔",
+    topRight: "╗",
+    bottomLeft: "╚",
+    bottomRight: "╝",
+    horizontal: "═",
+    vertical: "║",
+  },
+  bold: {
+    ...EmptyBorder,
+    topLeft: "┏",
+    topRight: "┓",
+    bottomLeft: "┗",
+    bottomRight: "┛",
+    horizontal: "━",
+    vertical: "┃",
+  },
+}
+
+export type OrcaBorderStyle = keyof typeof OrcaBorder
+// kilocode_change end

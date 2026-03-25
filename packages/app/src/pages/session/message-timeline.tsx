@@ -8,6 +8,8 @@ import { IconButton } from "@opencode-ai/ui/icon-button"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { InlineInput } from "@opencode-ai/ui/inline-input"
+import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { Tag } from "@opencode-ai/ui/tag"
 import { SessionTurn } from "@opencode-ai/ui/session-turn"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import type { AssistantMessage, Message as MessageType, Part, TextPart, UserMessage } from "@kilocode/sdk/v2"
@@ -18,11 +20,23 @@ import { shouldMarkBoundaryGesture, normalizeWheelDelta } from "@/pages/session/
 import { SessionContextUsage } from "@/components/session-context-usage"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLanguage } from "@/context/language"
+import { useLayout } from "@/context/layout"
 import { useSettings } from "@/context/settings"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
+import { useTerminal } from "@/context/terminal"
+import { focusTerminalById } from "@/pages/session/helpers"
 import { parseCommentNote, readCommentMetadata } from "@/utils/comment-note"
 
+const parentTitlePrefix = "New session - "
+const childTitlePrefix = "Child session - "
+const defaultTitleRegex = new RegExp(
+  `^(${parentTitlePrefix}|${childTitlePrefix})\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$`,
+)
+
+function isDefaultTitle(title: string) {
+  return defaultTitleRegex.test(title)
+}
 type MessageComment = {
   path: string
   comment: string
@@ -101,7 +115,7 @@ type TimelineStageInput = {
  * Defer-mounts small timeline windows so revealing older turns does not
  * block first paint with a large DOM mount.
  *
- * Once staging completes for a session it never re-stages — backfill and
+ * Once staging completes for a session it never re-stages Ã¢â‚¬â€ backfill and
  * new messages render immediately.
  */
 function createTimelineStaging(input: TimelineStageInput) {
@@ -216,9 +230,12 @@ export function MessageTimeline(props: {
   const settings = useSettings()
   const dialog = useDialog()
   const language = useLanguage()
+  const layout = useLayout()
+  const terminal = useTerminal()
 
   const rendered = createMemo(() => props.renderedUserMessages.map((message) => message.id))
-  const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
+  const sessionKey = createMemo(() => (params.dir ?? "") + (params.id ? "/" + params.id : ""))
+  const view = createMemo(() => layout.view(sessionKey))
   const sessionID = createMemo(() => params.id)
   const sessionMessages = createMemo(() => {
     const id = sessionID()
@@ -269,6 +286,59 @@ export function MessageTimeline(props: {
     messages: () => props.renderedUserMessages,
     config: stageCfg,
   })
+
+  const openShellInTerminal = async (input: { ptyID?: string }) => {
+    if (!input.ptyID) {
+      showToast({
+        variant: "error",
+        title: language.t("common.requestFailed"),
+        description: "This shell can no longer be moved into the terminal.",
+      })
+      return
+    }
+
+    view().terminal.open()
+
+    for (let i = 0; i < 120 && !terminal.ready(); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+
+    if (!terminal.ready()) {
+      showToast({
+        variant: "error",
+        title: language.t("common.requestFailed"),
+        description: language.t("terminal.loading"),
+      })
+      return
+    }
+
+    const existing = terminal.all().find((pty) => pty.id === input.ptyID)
+    if (existing) {
+      terminal.open(existing.id)
+      setTimeout(() => focusTerminalById(existing.id), 0)
+      return
+    }
+
+    const res = await sdk.client.pty.get({ ptyID: input.ptyID }).catch((err) => {
+      showToast({
+        variant: "error",
+        title: language.t("common.requestFailed"),
+        description: errorMessage(err),
+      })
+      return undefined
+    })
+
+    const info = res?.data
+    if (!info) return
+
+    const id = terminal.attach({
+      id: info.id,
+      title: info.title,
+      status: info.status,
+    })
+    if (!id) return
+    setTimeout(() => focusTerminalById(id), 0)
+  }
 
   const [title, setTitle] = createStore({
     draft: "",
@@ -577,12 +647,19 @@ export function MessageTimeline(props: {
                       <Show
                         when={title.editing}
                         fallback={
-                          <h1
-                            class="text-14-medium text-text-strong truncate grow-1 min-w-0 pl-2"
-                            onDblClick={openTitleEditor}
-                          >
-                            {titleValue()}
-                          </h1>
+                          <Tooltip value={titleValue()} placement="bottom-start">
+                            <button
+                              onClick={openTitleEditor}
+                              class="flex items-center gap-2 px-1.5 h-8 rounded-md hover:bg-surface-raised-base-hover transition-colors min-w-0 max-w-[400px] group/title"
+                            >
+                              <div class="shrink-0 size-7 flex items-center justify-center bg-surface-base rounded-[6px] border border-border-weak-base shadow-sm group-hover/title:border-border-base transition-colors">
+                                <Icon name="prompt" size="small" class="text-icon-base" />
+                              </div>
+                              <span class="text-14-medium text-text-strong truncate pr-1">
+                                {isDefaultTitle(titleValue() ?? "") ? language.t("command.session.new") : titleValue()}
+                              </span>
+                            </button>
+                          </Tooltip>
                         }
                       >
                         <InlineInput
@@ -591,7 +668,7 @@ export function MessageTimeline(props: {
                           }}
                           value={title.draft}
                           disabled={title.saving}
-                          class="text-14-medium text-text-strong grow-1 min-w-0 pl-2 rounded-[6px]"
+                          class="text-14-medium text-text-strong grow-1 min-w-0 pl-2 rounded-[6px] max-w-[300px]"
                           style={{ "--inline-input-shadow": "var(--shadow-xs-border-select)" }}
                           onInput={(event) => setTitle("draft", event.currentTarget.value)}
                           onKeyDown={(event) => {
@@ -613,7 +690,7 @@ export function MessageTimeline(props: {
                   </div>
                   <Show when={sessionID()}>
                     {(id) => (
-                      <div class="shrink-0 flex items-center gap-3">
+                      <div class="shrink-0 flex items-center gap-1">
                         <SessionContextUsage placement="bottom" />
                         <DropdownMenu
                           gutter={4}
@@ -761,6 +838,33 @@ export function MessageTimeline(props: {
                         showReasoningSummaries={settings.general.showReasoningSummaries()}
                         shellToolDefaultOpen={settings.general.shellToolPartsExpanded()}
                         editToolDefaultOpen={settings.general.editToolPartsExpanded()}
+                        onCancelTool={async (tool) => {
+                          const id = sessionID()
+                          if (!id) return
+                          if (tool.ptyID) {
+                            const stopped = await sdk.client.pty
+                              .interrupt({ ptyID: tool.ptyID, forceAfter: 1500 })
+                              .then((res) => res.data)
+                              .catch((err) => {
+                                showToast({
+                                  variant: "error",
+                                  title: language.t("common.requestFailed"),
+                                  description: errorMessage(err),
+                                })
+                                return false
+                              })
+                            if (stopped) return
+                          }
+
+                          await sdk.client.session.abort({ sessionID: id }).catch((err) => {
+                            showToast({
+                              variant: "error",
+                              title: language.t("common.requestFailed"),
+                              description: errorMessage(err),
+                            })
+                          })
+                        }}
+                        onOpenTerminal={openShellInTerminal}
                         classes={{
                           root: "min-w-0 w-full relative",
                           content: "flex flex-col justify-between !overflow-visible",

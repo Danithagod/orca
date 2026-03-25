@@ -10,6 +10,7 @@ import { ModelCache } from "./model-cache" // kilocode_change
 import { Auth } from "../auth" // kilocode_change
 import { KILO_OPENROUTER_BASE } from "@kilocode/kilo-gateway" // kilocode_change
 import { Filesystem } from "../util/filesystem"
+import { StartupTrace } from "@/startup/trace"
 
 // Try to import bundled snapshot (generated at build time)
 // Falls back to undefined in dev mode when snapshot doesn't exist
@@ -127,49 +128,51 @@ export namespace ModelsDev {
   })
 
   export async function get() {
-    const result = await Data()
-    // kilocode_change start
-    const providers = result as Record<string, Provider>
+    return StartupTrace.time("models.get", {
+      fn: async () => {
+        const result = await Data()
+        const providers = result as Record<string, Provider>
 
-    if (providers["kilo"]) {
-      delete providers["kilo"]
-    }
+        if (providers["kilo"]) {
+          delete providers["kilo"]
+        }
 
-    // Inject kilo provider with dynamic model fetching
-    if (!providers["kilo"]) {
-      const config = await Config.get()
-      const kiloOptions = config.provider?.kilo?.options
-      // kilocode_change start - resolve org ID from auth (OAuth accountId) not just config
-      const kiloAuth = await Auth.get("kilo")
-      const kiloOrgId =
-        kiloOptions?.kilocodeOrganizationId ?? (kiloAuth?.type === "oauth" ? kiloAuth.accountId : undefined)
-      // kilocode_change end
-      const normalizedBaseURL = normalizeKiloBaseURL(kiloOptions?.baseURL, kiloOrgId)
-      const kiloFetchOptions = {
-        ...(normalizedBaseURL ? { baseURL: normalizedBaseURL } : {}),
-        ...(kiloOrgId ? { kilocodeOrganizationId: kiloOrgId } : {}),
-      }
-      const defaultBaseURL = kiloOrgId
-        ? `https://api.kilo.ai/api/organizations/${kiloOrgId}`
-        : "https://api.kilo.ai/api/openrouter"
-      const providerBaseURL = normalizedBaseURL ?? defaultBaseURL
-      const ensureTrailingSlash = (value: string): string => (value.endsWith("/") ? value : `${value}/`)
-      const kiloModels = await ModelCache.fetch("kilo", kiloFetchOptions).catch(() => ({}))
-      providers["kilo"] = {
-        id: "kilo",
-        name: "Kilo Gateway",
-        env: ["KILO_API_KEY"],
-        api: ensureTrailingSlash(KILO_OPENROUTER_BASE),
-        npm: "@kilocode/kilo-gateway",
-        models: kiloModels,
-      }
-      if (Object.keys(kiloModels).length === 0) {
-        ModelCache.refresh("kilo", kiloFetchOptions).catch(() => {})
-      }
-    }
+        if (!providers["kilo"]) {
+          const config = await Config.get()
+          const kiloOptions = config.provider?.kilo?.options
+          const kiloAuth = await Auth.get("kilo")
+          const kiloOrgId =
+            kiloOptions?.kilocodeOrganizationId ?? (kiloAuth?.type === "oauth" ? kiloAuth.accountId : undefined)
+          const normalizedBaseURL = normalizeKiloBaseURL(kiloOptions?.baseURL, kiloOrgId)
+          const kiloFetchOptions = {
+            ...(normalizedBaseURL ? { baseURL: normalizedBaseURL } : {}),
+            ...(kiloOrgId ? { kilocodeOrganizationId: kiloOrgId } : {}),
+          }
+          const defaultBaseURL = kiloOrgId
+            ? `https://api.kilo.ai/api/organizations/${kiloOrgId}`
+            : "https://api.kilo.ai/api/openrouter"
+          const providerBaseURL = normalizedBaseURL ?? defaultBaseURL
+          const ensureTrailingSlash = (value: string): string => (value.endsWith("/") ? value : `${value}/`)
+          const kiloModels = await StartupTrace.time("models.kilo.fetch", {
+            extra: { baseURL: providerBaseURL },
+            fn: () => ModelCache.fetch("kilo", kiloFetchOptions).catch(() => ({})),
+          })
+          providers["kilo"] = {
+            id: "kilo",
+            name: "Kilo Gateway",
+            env: ["KILO_API_KEY"],
+            api: ensureTrailingSlash(KILO_OPENROUTER_BASE),
+            npm: "@kilocode/kilo-gateway",
+            models: kiloModels,
+          }
+          if (Object.keys(kiloModels).length === 0) {
+            ModelCache.refresh("kilo", kiloFetchOptions).catch(() => {})
+          }
+        }
 
-    return providers
-    // kilocode_change end
+        return providers
+      },
+    })
   }
 
   export async function refresh() {

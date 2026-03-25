@@ -7,7 +7,7 @@ use process_wrap::tokio::{CommandWrapper, JobObject, KillOnDrop};
 use std::collections::HashMap;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -110,12 +110,50 @@ fn get_cli_install_path() -> Option<std::path::PathBuf> {
 }
 
 pub fn get_sidecar_path(app: &tauri::AppHandle) -> std::path::PathBuf {
+    if cfg!(dev) {
+        if let Some(path) = dev_sidecar_path() {
+            return path;
+        }
+    }
+
     // Get binary with symlinks support
     tauri::process::current_binary(&app.env())
         .expect("Failed to get current binary")
         .parent()
         .expect("Failed to get parent dir")
-        .join("kilo-cli")
+        .join(sidecar_name())
+}
+
+fn sidecar_name() -> &'static str {
+    if cfg!(windows) {
+        return "kilo-cli.exe";
+    }
+
+    "kilo-cli"
+}
+
+fn dev_sidecar_path() -> Option<PathBuf> {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("sidecars");
+    let prefix = format!("kilo-cli-{}", env!("TAURI_ENV_TARGET_TRIPLE"));
+
+    std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let path = entry.path();
+            let name = path.file_name()?.to_str()?;
+            if !name.starts_with(&prefix) {
+                return None;
+            }
+            if cfg!(windows) && !name.ends_with(".exe") {
+                return None;
+            }
+
+            let modified = entry.metadata().ok()?.modified().ok()?;
+            Some((modified, path))
+        })
+        .max_by_key(|(modified, _)| *modified)
+        .map(|(_, path)| path)
 }
 
 fn is_cli_installed() -> bool {

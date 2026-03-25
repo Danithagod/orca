@@ -13,6 +13,8 @@ import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { type LocalProject } from "@/context/layout"
 import { sidebarExpanded } from "./sidebar-shell-helpers"
 
+import { ModeToggle } from "@/components/mode-toggle"
+
 export const SidebarContent = (props: {
   mobile?: boolean
   opened: Accessor<boolean>
@@ -91,6 +93,7 @@ export const SidebarContent = (props: {
           </DragDropProvider>
         </div>
         <div class="shrink-0 w-full pt-3 pb-6 flex flex-col items-center gap-2">
+          <ModeToggle />
           <TooltipKeybind placement={placement()} title={props.settingsLabel()} keybind={props.settingsKeybind() ?? ""}>
             <IconButton
               icon="settings-gear"

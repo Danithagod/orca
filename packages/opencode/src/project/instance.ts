@@ -5,6 +5,7 @@ import { State } from "./state"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
 import { Filesystem } from "@/util/filesystem"
+import { StartupTrace } from "@/startup/trace"
 
 interface Context {
   directory: string
@@ -68,9 +69,13 @@ export const Instance = {
       Log.Default.info("creating instance", { directory })
       existing = track(
         directory,
-        boot({
-          directory,
-          init: input.init,
+        StartupTrace.time("instance.create", {
+          extra: { directory },
+          fn: () =>
+            boot({
+              directory,
+              init: input.init,
+            }),
         }),
       )
     }

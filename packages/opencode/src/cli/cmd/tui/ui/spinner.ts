@@ -243,7 +243,7 @@ export function deriveInactiveColor(brightColor: ColorInput, factor: number = 0.
   return RGBA.fromValues(baseRgba.r, baseRgba.g, baseRgba.b, factor)
 }
 
-export type KnightRiderStyle = "blocks" | "diamonds"
+export type KnightRiderStyle = "blocks" | "diamonds" | "orca" | "sonar" | "ripple" | "wave" | "biowave"
 
 export interface KnightRiderOptions {
   width?: number
@@ -314,6 +314,48 @@ export function createFrames(options: KnightRiderOptions = {}): string[] {
         const shapes = ["⬥", "◆", "⬩", "⬪"]
         if (index >= 0 && index < trailOptions.colors.length) {
           return shapes[Math.min(index, shapes.length - 1)]
+        }
+        return "·"
+      }
+
+      if (style === "orca") {
+        const jump = ["⢀", "⢠", "⢰", "⠆", "⠔", "⠤", "⢄", "⠠"]
+        if (index === 0) {
+          return jump[frameIndex % jump.length]
+        }
+        if (index === 1) return "∘"
+        if (index === 2) return "·"
+        return " "
+      }
+
+      if (style === "sonar") {
+        const wave = ["█", "▓", "▒", "░"]
+        if (index >= 0 && index < wave.length) {
+          return wave[index]
+        }
+        return "·"
+      }
+
+      if (style === "ripple") {
+        const ripple = ["●", "◉", "◎", "○", "◦", "·"]
+        if (index >= 0 && index < ripple.length) {
+          return ripple[index]
+        }
+        return " "
+      }
+
+      if (style === "wave") {
+        const wave = ["⠐", "⠠", "⢀", "⣀", "⡀", "⠄", "⠂", "⠁"]
+        if (index >= 0 && index < 4) {
+          return wave[(frameIndex + index) % wave.length]
+        }
+        return " "
+      }
+
+      if (style === "biowave") {
+        const heights = ["█", "⣶", "⣦", "⣤", "⣄", "⣀", "⢀"]
+        if (index >= 0 && index < heights.length) {
+          return heights[index]
         }
         return "·"
       }

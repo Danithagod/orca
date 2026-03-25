@@ -1,0 +1,14 @@
+{
+  "name": "@orca/cli-windows-x64-baseline",
+  "version": "0.0.0-main-202603201944",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kilo-Org/kilocode"
+  }
+}

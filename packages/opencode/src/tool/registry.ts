@@ -32,6 +32,10 @@ import { ApplyPatchTool } from "./apply_patch"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
+// Orca tools - memory and orchestrator
+import { MemoryStoreTool, MemoryRecallTool, MemorySearchTool, MemoryListTool, MemoryForgetTool } from "./memory"
+import { AgentSpawnTool, AgentStatusTool, TaskCreateTool, TaskStatusTool, DelegateTool } from "./orchestrator"
+
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
 
@@ -122,6 +126,17 @@ export namespace ToolRegistry {
       ...(Flag.KILO_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       PlanExitTool, // kilocode_change - always registered; gated by agent permission instead
+      // Orca tools - memory and orchestrator
+      MemoryStoreTool,
+      MemoryRecallTool,
+      MemorySearchTool,
+      MemoryListTool,
+      MemoryForgetTool,
+      AgentSpawnTool,
+      AgentStatusTool,
+      TaskCreateTool,
+      TaskStatusTool,
+      DelegateTool,
       ...custom,
     ]
   }

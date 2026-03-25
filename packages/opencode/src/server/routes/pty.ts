@@ -130,6 +130,31 @@ export const PtyRoutes = lazy(() =>
         return c.json(true)
       },
     )
+    .post(
+      "/:ptyID/interrupt",
+      describeRoute({
+        summary: "Interrupt PTY session",
+        description: "Send an interrupt signal to the foreground process in a pseudo-terminal (PTY) session.",
+        operationId: "pty.interrupt",
+        responses: {
+          200: {
+            description: "Interrupt signal sent",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ ptyID: z.string() })),
+      validator("json", Pty.InterruptInput),
+      async (c) => {
+        const ok = Pty.interrupt(c.req.valid("param").ptyID, c.req.valid("json"))
+        return c.json(ok)
+      },
+    )
     .get(
       "/:ptyID/connect",
       describeRoute({

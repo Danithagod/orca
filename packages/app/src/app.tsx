@@ -8,11 +8,12 @@ import { Font } from "@opencode-ai/ui/font"
 import { ThemeProvider } from "@opencode-ai/ui/theme"
 import { MetaProvider } from "@solidjs/meta"
 import { BaseRouterProps, Navigate, Route, Router } from "@solidjs/router"
-import { Component, ErrorBoundary, type JSX, lazy, type ParentProps, Show, Suspense } from "solid-js"
+import { Component, ErrorBoundary, onMount, type JSX, lazy, type ParentProps, Show, Suspense } from "solid-js"
 import { CommandProvider } from "@/context/command"
 import { CommentsProvider } from "@/context/comments"
 import { FileProvider } from "@/context/file"
 import { GlobalSDKProvider } from "@/context/global-sdk"
+import { useGlobalSDK } from "@/context/global-sdk"
 import { GlobalSyncProvider } from "@/context/global-sync"
 import { HighlightsProvider } from "@/context/highlights"
 import { LanguageProvider, useLanguage } from "@/context/language"
@@ -24,9 +25,9 @@ import { usePlatform } from "@/context/platform"
 import { PromptProvider } from "@/context/prompt"
 import { type ServerConnection, ServerProvider, useServer } from "@/context/server"
 import { SettingsProvider } from "@/context/settings"
-import { TerminalProvider } from "@/context/terminal"
 import DirectoryLayout from "@/pages/directory-layout"
 import Layout from "@/pages/layout"
+import { markStartup } from "@/utils/startup"
 import { ErrorPage } from "./pages/error"
 import { Dynamic } from "solid-js/web"
 
@@ -92,23 +93,35 @@ function AppShellProviders(props: ParentProps) {
 
 function SessionProviders(props: ParentProps) {
   return (
-    <TerminalProvider>
-      <FileProvider>
-        <PromptProvider>
-          <CommentsProvider>{props.children}</CommentsProvider>
-        </PromptProvider>
-      </FileProvider>
-    </TerminalProvider>
+    <FileProvider>
+      <PromptProvider>
+        <CommentsProvider>{props.children}</CommentsProvider>
+      </PromptProvider>
+    </FileProvider>
   )
 }
 
 function RouterRoot(props: ParentProps<{ appChildren?: JSX.Element }>) {
   return (
     <AppShellProviders>
+      <StartupMarker />
       {props.appChildren}
       {props.children}
     </AppShellProviders>
   )
+}
+
+function StartupMarker() {
+  const globalSDK = useGlobalSDK()
+
+  onMount(() => {
+    markStartup({
+      sdk: globalSDK.client,
+      message: "app.shell.mounted",
+    })
+  })
+
+  return null
 }
 
 export function AppBaseProviders(props: ParentProps) {

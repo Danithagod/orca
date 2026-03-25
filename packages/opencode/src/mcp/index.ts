@@ -23,6 +23,7 @@ import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
 import { TuiEvent } from "@/cli/cmd/tui/event"
 import open from "open"
+import { StartupTrace } from "@/startup/trace"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
@@ -183,40 +184,46 @@ export namespace MCP {
   }
 
   const state = Instance.state(
-    async () => {
-      const cfg = await Config.get()
-      const config = cfg.mcp ?? {}
-      const clients: Record<string, MCPClient> = {}
-      const status: Record<string, Status> = {}
+    async () =>
+      StartupTrace.time("mcp.state.init", {
+        extra: { directory: Instance.directory },
+        fn: async () => {
+          const cfg = await Config.get()
+          const config = cfg.mcp ?? {}
+          const clients: Record<string, MCPClient> = {}
+          const status: Record<string, Status> = {}
 
-      await Promise.all(
-        Object.entries(config).map(async ([key, mcp]) => {
-          if (!isMcpConfigured(mcp)) {
-            log.error("Ignoring MCP config entry without type", { key })
-            return
+          await Promise.all(
+            Object.entries(config).map(async ([key, mcp]) => {
+              if (!isMcpConfigured(mcp)) {
+                log.error("Ignoring MCP config entry without type", { key })
+                return
+              }
+
+              if (mcp.enabled === false) {
+                status[key] = { status: "disabled" }
+                return
+              }
+
+              const result = await StartupTrace.time("mcp.state.entry", {
+                extra: { directory: Instance.directory, key, type: mcp.type },
+                fn: () => create(key, mcp).catch(() => undefined),
+              })
+              if (!result) return
+
+              status[key] = result.status
+
+              if (result.mcpClient) {
+                clients[key] = result.mcpClient
+              }
+            }),
+          )
+          return {
+            status,
+            clients,
           }
-
-          // If disabled by config, mark as disabled without trying to connect
-          if (mcp.enabled === false) {
-            status[key] = { status: "disabled" }
-            return
-          }
-
-          const result = await create(key, mcp).catch(() => undefined)
-          if (!result) return
-
-          status[key] = result.status
-
-          if (result.mcpClient) {
-            clients[key] = result.mcpClient
-          }
-        }),
-      )
-      return {
-        status,
-        clients,
-      }
-    },
+        },
+      }),
     async (state) => {
       // The MCP SDK only signals the direct child process on close.
       // Servers like chrome-devtools-mcp spawn grandchild processes
@@ -531,18 +538,22 @@ export namespace MCP {
   }
 
   export async function status() {
-    const s = await state()
-    const cfg = await Config.get()
-    const config = cfg.mcp ?? {}
-    const result: Record<string, Status> = {}
+    return StartupTrace.time("mcp.status", {
+      extra: { directory: Instance.directory },
+      fn: async () => {
+        const s = await state()
+        const cfg = await Config.get()
+        const config = cfg.mcp ?? {}
+        const result: Record<string, Status> = {}
 
-    // Include all configured MCPs from config, not just connected ones
-    for (const [key, mcp] of Object.entries(config)) {
-      if (!isMcpConfigured(mcp)) continue
-      result[key] = s.status[key] ?? { status: "disabled" }
-    }
+        for (const [key, mcp] of Object.entries(config)) {
+          if (!isMcpConfigured(mcp)) continue
+          result[key] = s.status[key] ?? { status: "disabled" }
+        }
 
-    return result
+        return result
+      },
+    })
   }
 
   export async function clients() {

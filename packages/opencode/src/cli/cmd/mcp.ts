@@ -381,9 +381,11 @@ export const McpLogoutCommand = cmd({
 })
 
 async function resolveConfigPath(baseDir: string, global = false) {
-  // kilocode_change start - prefer kilo.json/.kilo over opencode.json/.opencode
-  // Check for existing config files (prefer .jsonc over .json, check .kilo/ and .opencode/ subdirectory too)
+  // kilocode_change start - prefer orca.json/.orca over kilo.json/.kilo over opencode.json/.opencode
+  // Check for existing config files (prefer .jsonc over .json, check .orca/, .kilo/ and .opencode/ subdirectory too)
   const candidates = [
+    path.join(baseDir, "orca.json"),
+    path.join(baseDir, "orca.jsonc"),
     path.join(baseDir, "kilo.json"),
     path.join(baseDir, "kilo.jsonc"),
     path.join(baseDir, "opencode.json"),
@@ -392,6 +394,8 @@ async function resolveConfigPath(baseDir: string, global = false) {
 
   if (!global) {
     candidates.push(
+      path.join(baseDir, ".orca", "orca.json"),
+      path.join(baseDir, ".orca", "orca.jsonc"),
       path.join(baseDir, ".kilo", "kilo.json"),
       path.join(baseDir, ".kilo", "kilo.jsonc"),
       path.join(baseDir, ".kilo", "opencode.json"),
@@ -407,8 +411,8 @@ async function resolveConfigPath(baseDir: string, global = false) {
     }
   }
 
-  // Default to kilo.json if none exist
-  return path.join(baseDir, "kilo.json")
+  // Default to orca.json if none exist
+  return path.join(baseDir, "orca.json")
   // kilocode_change end
 }
 

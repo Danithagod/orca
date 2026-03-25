@@ -57,7 +57,14 @@ function ShellRollingCommand(props: { text: string; animate?: boolean }) {
   )
 }
 
-function ShellExpanded(props: { cmd: string; out: string; open: boolean }) {
+function ShellExpanded(props: {
+  cmd: string
+  out: string
+  open: boolean
+  pending?: boolean
+  onCancel?: () => void
+  onOpenTerminal?: () => void
+}) {
   const i18n = useI18n()
   const rows = 10
   const rowHeight = 22
@@ -129,6 +136,38 @@ function ShellExpanded(props: { cmd: string; out: string; open: boolean }) {
               <span data-slot="shell-expanded-input">{props.cmd}</span>
             </div>
             <div data-slot="shell-expanded-actions">
+              <Show when={props.onOpenTerminal && props.cmd}>
+                <Tooltip value={i18n.t("ui.tool.shell.openTerminal") ?? "Open in Terminal"} placement="top" gutter={4}>
+                  <IconButton
+                    icon="console"
+                    size="small"
+                    variant="ghost"
+                    class="shell-expanded-action"
+                    onMouseDown={(e: MouseEvent) => e.preventDefault()}
+                    onClick={(e: MouseEvent) => {
+                      e.stopPropagation()
+                      props.onOpenTerminal?.()
+                    }}
+                    aria-label={i18n.t("ui.tool.shell.openTerminal") ?? "Open in Terminal"}
+                  />
+                </Tooltip>
+              </Show>
+              <Show when={props.pending && props.onCancel}>
+                <Tooltip value={i18n.t("ui.tool.shell.cancel") ?? "Cancel Command"} placement="top" gutter={4}>
+                  <IconButton
+                    icon="stop"
+                    size="small"
+                    variant="ghost"
+                    class="shell-expanded-action"
+                    onMouseDown={(e: MouseEvent) => e.preventDefault()}
+                    onClick={(e: MouseEvent) => {
+                      e.stopPropagation()
+                      props.onCancel?.()
+                    }}
+                    aria-label={i18n.t("ui.tool.shell.cancel") ?? "Cancel Command"}
+                  />
+                </Tooltip>
+              </Show>
               <Tooltip
                 value={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copy")}
                 placement="top"
@@ -168,7 +207,13 @@ function ShellExpanded(props: { cmd: string; out: string; open: boolean }) {
   )
 }
 
-export function ShellRollingResults(props: { part: ToolPart; animate?: boolean; defaultOpen?: boolean }) {
+export function ShellRollingResults(props: {
+  part: ToolPart
+  animate?: boolean
+  defaultOpen?: boolean
+  onCancel?: () => void
+  onOpenTerminal?: () => void
+}) {
   const i18n = useI18n()
   const reduce = useReducedMotion()
   const wiped = new Set<string>()
@@ -285,7 +330,14 @@ export function ShellRollingResults(props: { part: ToolPart; animate?: boolean; 
           }}
         />
       </div>
-      <ShellExpanded cmd={command()} out={text()} open={expanded()} />
+      <ShellExpanded
+        cmd={command()}
+        out={text()}
+        open={expanded()}
+        pending={pending()}
+        onCancel={props.onCancel}
+        onOpenTerminal={props.onOpenTerminal}
+      />
     </div>
   )
 }

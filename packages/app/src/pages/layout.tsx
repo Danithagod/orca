@@ -9,6 +9,8 @@ import {
   onMount,
   ParentProps,
   Show,
+  Switch,
+  Match,
   untrack,
 } from "solid-js"
 import { useNavigate, useParams } from "@solidjs/router"
@@ -44,7 +46,9 @@ import { createAim } from "@/utils/aim"
 import { setNavigate } from "@/utils/notification-click"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { setSessionHandoff } from "@/pages/session/handoff"
+import AdeView from "@/pages/ade"
 
+import { TerminalProvider } from "@/context/terminal"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme"
 import { DialogSelectProvider } from "@/components/dialog-select-provider"
@@ -2269,7 +2273,14 @@ export default function Layout(props: ParentProps) {
             }}
           >
             <Show when={!autoselecting()} fallback={<div class="size-full" />}>
-              {props.children}
+              <TerminalProvider>
+                <Switch>
+                  <Match when={layout.mode() === "ade"}>
+                    <AdeView />
+                  </Match>
+                  <Match when={true}>{props.children}</Match>
+                </Switch>
+              </TerminalProvider>
             </Show>
           </main>
         </div>

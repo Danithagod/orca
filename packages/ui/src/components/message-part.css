@@ -410,15 +410,12 @@
     position: absolute;
     top: 4px;
     right: 4px;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.15s ease;
-  }
-
-  &:hover [data-slot="bash-copy"],
-  &:focus-within [data-slot="bash-copy"] {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     opacity: 1;
     pointer-events: auto;
+    transition: opacity 0.15s ease;
   }
 
   [data-slot="bash-copy"] [data-component="icon-button"][data-variant="secondary"] {
@@ -428,6 +425,20 @@
 
   [data-slot="bash-copy"] [data-component="icon-button"][data-variant="secondary"] [data-slot="icon-svg"] {
     color: var(--icon-base);
+  }
+
+  [data-slot="bash-cancel-status"] {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    min-height: 28px;
+    border: 1px solid var(--border-weak-base);
+    border-radius: 999px;
+    background: var(--background-base);
+    color: var(--text-weak);
+    font-size: 11px;
+    line-height: 1;
   }
 
   [data-slot="bash-scroll"] {

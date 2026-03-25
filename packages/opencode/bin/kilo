@@ -17,7 +17,7 @@ function run(target) {
   process.exit(code)
 }
 
-const envPath = process.env.KILO_BIN_PATH
+const envPath = process.env.KILO_BIN_PATH || process.env.ORCA_BIN_PATH
 if (envPath) {
   run(envPath)
 }
@@ -25,8 +25,7 @@ if (envPath) {
 const scriptPath = fs.realpathSync(__filename)
 const scriptDir = path.dirname(scriptPath)
 
-// kilocode_change start - fall through to findBinary() if cached binary fails
-const cached = path.join(scriptDir, ".kilo")
+const cached = path.join(scriptDir, ".orca")
 if (fs.existsSync(cached)) {
   const result = childProcess.spawnSync(cached, process.argv.slice(2), {
     stdio: "inherit",
@@ -35,10 +34,7 @@ if (fs.existsSync(cached)) {
     const code = typeof result.status === "number" ? result.status : 0
     process.exit(code)
   }
-  // cached binary failed (e.g. wrong platform/arch, missing dynamic linker),
-  // fall through to findBinary() which has better variant detection
 }
-// kilocode_change end
 
 const platformMap = {
   darwin: "darwin",
@@ -59,8 +55,10 @@ let arch = archMap[os.arch()]
 if (!arch) {
   arch = os.arch()
 }
+// Use @kilocode for backward compatibility, fall back to @orca
 const base = "@kilocode/cli-" + platform + "-" + arch
-const binary = platform === "windows" ? "kilo.exe" : "kilo"
+const baseOrca = "@orca/cli-" + platform + "-" + arch
+const binary = platform === "windows" ? "orca.exe" : "orca"
 
 function supportsAvx2() {
   if (arch !== "x64") return false
@@ -137,24 +135,24 @@ const names = (() => {
 
     if (musl) {
       if (arch === "x64") {
-        if (baseline) return [`${base}-baseline-musl`, `${base}-musl`, `${base}-baseline`, base]
-        return [`${base}-musl`, `${base}-baseline-musl`, base, `${base}-baseline`]
+        if (baseline) return [`${base}-baseline-musl`, `${base}-musl`, `${base}-baseline`, base, `${baseOrca}-baseline-musl`, `${baseOrca}-musl`, `${baseOrca}-baseline`, baseOrca]
+        return [`${base}-musl`, `${base}-baseline-musl`, base, `${base}-baseline`, `${baseOrca}-musl`, `${baseOrca}-baseline-musl`, baseOrca, `${baseOrca}-baseline`]
       }
-      return [`${base}-musl`, base]
+      return [`${base}-musl`, base, `${baseOrca}-musl`, baseOrca]
     }
 
     if (arch === "x64") {
-      if (baseline) return [`${base}-baseline`, base, `${base}-baseline-musl`, `${base}-musl`]
-      return [base, `${base}-baseline`, `${base}-musl`, `${base}-baseline-musl`]
+      if (baseline) return [`${base}-baseline`, base, `${base}-baseline-musl`, `${base}-musl`, `${baseOrca}-baseline`, baseOrca, `${baseOrca}-baseline-musl`, `${baseOrca}-musl`]
+      return [base, `${base}-baseline`, `${base}-musl`, `${base}-baseline-musl`, baseOrca, `${baseOrca}-baseline`, `${baseOrca}-musl`, `${baseOrca}-baseline-musl`]
     }
-    return [base, `${base}-musl`]
+    return [base, `${baseOrca}`]
   }
 
   if (arch === "x64") {
-    if (baseline) return [`${base}-baseline`, base]
-    return [base, `${base}-baseline`]
+    if (baseline) return [`${base}-baseline`, base, `${baseOrca}-baseline`, baseOrca]
+    return [base, `${base}-baseline`, baseOrca, `${baseOrca}-baseline`]
   }
-  return [base]
+  return [base, baseOrca]
 })()
 
 function findBinary(startDir) {
@@ -178,8 +176,8 @@ function findBinary(startDir) {
 const resolved = findBinary(scriptDir)
 if (!resolved) {
   console.error(
-    "It seems that your package manager failed to install the right version of the Kilo CLI for your platform. You can try manually installing " +
-      names.map((n) => `\"${n}\"`).join(" or ") +
+    "It seems that your package manager failed to install the right version of the CLI for your platform. You can try manually installing " +
+      names.map((n) => `"${n}"`).join(" or ") +
       " package",
   )
   process.exit(1)

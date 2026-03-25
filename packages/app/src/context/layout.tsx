@@ -9,6 +9,7 @@ import { Project } from "@kilocode/sdk/v2"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
 import { decode64 } from "@/utils/base64"
 import { same } from "@/utils/same"
+import { markStartup, traceStartup } from "@/utils/startup"
 import { createScrollPersistence, type SessionScroll } from "./layout-scroll"
 import { createPathHelpers } from "./file/path"
 
@@ -253,6 +254,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         mobileSidebar: {
           opened: false,
         },
+        mode: "ide" as "ide" | "ade",
         sessionTabs: {} as Record<string, SessionTabs>,
         sessionView: {} as Record<string, SessionView>,
         handoff: {
@@ -544,11 +546,27 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     })
 
     onMount(() => {
-      Promise.all(
-        server.projects.list().map((project) => {
-          return globalSync.project.loadSessions(project.worktree)
-        }),
-      )
+      const projects = server.projects.list()
+      markStartup({
+        sdk: globalSdk.client,
+        message: "layout.projects.preload.start",
+        extra: {
+          count: projects.length,
+        },
+      })
+      void traceStartup({
+        sdk: globalSdk.client,
+        message: "layout.projects.preload.total",
+        extra: {
+          count: projects.length,
+        },
+        fn: () =>
+          Promise.all(
+            projects.map((project) => {
+              return globalSync.project.loadSessions(project.worktree)
+            }),
+          ),
+      })
     })
 
     return {
@@ -687,6 +705,10 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         toggle() {
           setStore("mobileSidebar", "opened", (x) => !x)
         },
+      },
+      mode: createMemo(() => store.mode),
+      setMode(mode: "ide" | "ade") {
+        setStore("mode", mode)
       },
       pendingMessage: {
         set(sessionKey: string, messageID: string) {

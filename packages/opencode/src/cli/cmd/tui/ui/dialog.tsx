@@ -6,6 +6,7 @@ import { createStore } from "solid-js/store"
 import { useToast } from "./toast"
 import { Flag } from "@/flag/flag"
 import { Selection } from "@tui/util/selection"
+import { OrcaBorder } from "../component/border"
 
 export function Dialog(
   props: ParentProps<{
@@ -48,7 +49,10 @@ export function Dialog(
         width={props.size === "large" ? 80 : 60}
         maxWidth={dimensions().width - 2}
         backgroundColor={theme.backgroundPanel}
-        paddingTop={1}
+        padding={1}
+        border={["top", "bottom", "left", "right"]}
+        borderColor={theme.primary}
+        customBorderChars={OrcaBorder.rounded}
       >
         {props.children}
       </box>
