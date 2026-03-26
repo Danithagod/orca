@@ -39,6 +39,7 @@ import zenburn from "./theme/zenburn.json" with { type: "json" }
 import carbonfox from "./theme/carbonfox.json" with { type: "json" }
 import colorblind from "./theme/colorblind.json" with { type: "json" } // kilocode_change
 import orca from "./theme/orca.json" with { type: "json" } // kilocode_change
+import orcaFuturistic from "./theme/orca-futuristic.json" with { type: "json" } // kilocode_change
 import { useKV } from "./kv"
 import { useRenderer } from "@opentui/solid"
 import { createStore, produce } from "solid-js/store"
@@ -178,6 +179,7 @@ export const DEFAULT_THEMES: Record<string, ThemeJson> = {
   carbonfox,
   colorblind, // kilocode_change
   orca, // kilocode_change
+  ["orca-futuristic"]: orcaFuturistic, // kilocode_change
 }
 
 function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
@@ -291,7 +293,10 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     const [store, setStore] = createStore({
       themes: DEFAULT_THEMES,
       mode: kv.get("theme_mode", props.mode),
-      active: (config.theme ?? kv.get("theme", "orca")) as string, // kilocode_change
+      active: (() => {
+        const theme = config.theme ?? kv.get("theme", "orca-futuristic")
+        return theme === "orca" ? "orca-futuristic" : theme
+      })() as string,
       ready: false,
     })
 
@@ -311,7 +316,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
           )
         })
         .catch(() => {
-          setStore("active", "orca") // kilocode_change - use Orca as fallback
+          setStore("active", "orca-futuristic") // kilocode_change - use Orca Futuristic as fallback
         })
         .finally(() => {
           if (store.active !== "system") {
@@ -334,7 +339,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
             if (store.active === "system") {
               setStore(
                 produce((draft) => {
-                  draft.active = "orca" // kilocode_change - use Orca as fallback
+                  draft.active = "orca-futuristic" // kilocode_change - use Orca Futuristic as fallback
                   draft.ready = true
                 }),
               )
@@ -359,7 +364,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     })
 
     const values = createMemo(() => {
-      return resolveTheme(store.themes[store.active] ?? store.themes.orca, store.mode)
+      return resolveTheme(store.themes[store.active] ?? store.themes["orca-futuristic"], store.mode)
     })
 
     const syntax = createMemo(() => generateSyntax(values()))

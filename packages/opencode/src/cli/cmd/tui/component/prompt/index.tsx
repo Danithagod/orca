@@ -1,11 +1,21 @@
-import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, t, dim, fg, RGBA, TextAttributes } from "@opentui/core"
+import {
+  BoxRenderable,
+  TextareaRenderable,
+  MouseEvent,
+  PasteEvent,
+  t,
+  dim,
+  fg,
+  RGBA,
+  TextAttributes,
+} from "@opentui/core"
 import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, on, Show, Switch, Match } from "solid-js"
 import "opentui-spinner/solid"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
 import { useLocal } from "@tui/context/local"
-import { useTheme } from "@tui/context/theme"
-import { EmptyBorder } from "@tui/component/border"
+import { selectedForeground, useTheme } from "@tui/context/theme"
+import { EmptyBorder, OrcaBorder } from "@tui/component/border"
 import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
@@ -35,7 +45,6 @@ import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
 import { shouldSummarize as shouldPasteSummary } from "@/kilocode/paste-summary"
-import { OrcaPanel, OrcaStatusBadge } from "../orca-ui"
 
 export type PromptProps = {
   sessionID?: string
@@ -318,7 +327,7 @@ export function Prompt(props: PromptProps) {
                     ...part.source,
                     start: newStart,
                     end: newEnd,
-                    },
+                  },
                 }
               }
 
@@ -749,6 +758,14 @@ export function Prompt(props: PromptProps) {
     return local.agent.color(local.agent.current().name)
   })
 
+  const agent = createMemo(() => {
+    if (store.mode === "shell") return "SHELL"
+    return local.agent.current().name.toUpperCase()
+  })
+
+  const badgeFg = createMemo(() => selectedForeground(theme, highlight()))
+  const warningFg = createMemo(() => selectedForeground(theme, theme.warning))
+
   const showVariant = createMemo(() => {
     const variants = local.model.variant.list()
     if (variants.length === 0) return false
@@ -770,27 +787,39 @@ export function Prompt(props: PromptProps) {
     return {
       frames: createFrames({
         color,
-        style: "biowave",
-        inactiveFactor: 0.6,
-        // enableFading: false,
-        minAlpha: 0.3,
+        style: "slash",
+        width: 10,
+        trailSteps: 6,
+        inactiveFactor: 0.1,
+        minAlpha: 0.05,
+        holdStart: 2,
+        holdEnd: 1,
       }),
       color: createColors({
         color,
-        style: "biowave",
-        inactiveFactor: 0.6,
-        // enableFading: false,
-        minAlpha: 0.3,
+        style: "slash",
+        width: 10,
+        trailSteps: 6,
+        inactiveFactor: 0.1,
+        minAlpha: 0.05,
+        holdStart: 2,
+        holdEnd: 1,
       }),
     }
   })
 
   // Animation for agent transition
   const [transitionActive, setTransitionActive] = createSignal(false)
-  createEffect(on(() => local.agent.current().name, () => {
-    setTransitionActive(true)
-    setTimeout(() => setTransitionActive(false), 300)
-  }, { defer: true }))
+  createEffect(
+    on(
+      () => local.agent.current().name,
+      () => {
+        setTransitionActive(true)
+        setTimeout(() => setTransitionActive(false), 300)
+      },
+      { defer: true },
+    ),
+  )
 
   return (
     <>
@@ -814,16 +843,16 @@ export function Prompt(props: PromptProps) {
         agentStyleId={agentStyleId}
         promptPartTypeId={() => promptPartTypeId}
       />
-      <box ref={(r) => (anchor = r)} visible={props.visible !== false}>
-        <OrcaPanel 
-          borderStyle="rounded" 
-          padding={1} 
-          borderColor={highlight()}
-          bgColor={transitionActive() ? "element" : "panel"}
-        >
+      <box ref={(r) => (anchor = r)} visible={props.visible !== false} alignItems="center" width="100%">
+        <box padding={0.5} width="90%">
           <box
-            paddingLeft={1}
-            paddingRight={1}
+            border={["left", "right", "top", "bottom"]}
+            borderColor={highlight()}
+            customBorderChars={OrcaBorder.futuristic}
+            paddingLeft={2}
+            paddingRight={2}
+            paddingTop={1}
+            paddingBottom={1}
             flexShrink={0}
             flexGrow={1}
           >
@@ -1024,153 +1053,77 @@ export function Prompt(props: PromptProps) {
               cursorColor={theme.text}
               syntaxStyle={syntax()}
             />
-            <box flexDirection="row" flexShrink={0} paddingTop={0.5} gap={2} alignItems="center">
-              <box flexDirection="row" gap={1} alignItems="center">
-                <text fg={highlight()} attributes={TextAttributes.BOLD}>
-                  {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}
-                </text>
+            {/* Push status rail to the very bottom */}
+            <box flexGrow={1} />
+            <box flexDirection="row" flexShrink={0} alignItems="center" gap={0.5} marginTop={1}>
+              <box flexShrink={0} alignItems="center" justifyContent="center">
+                <box backgroundColor={highlight()} paddingLeft={1} paddingRight={1}>
+                  <text fg={badgeFg()} attributes={TextAttributes.BOLD}>
+                    {agent()}
+                  </text>
+                </box>
               </box>
-              
-              <Show when={store.mode === "normal"}>
-                <box flexDirection="row" gap={1} alignItems="center">
-                  <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
+              <box
+                flexDirection="row"
+                flexGrow={1}
+                minWidth={1}
+                border={["left", "right"]}
+                borderColor={highlight()}
+                customBorderChars={OrcaBorder.bold}
+                backgroundColor={theme.backgroundPanel}
+                alignItems="center"
+                gap={0.5}
+                paddingLeft={1}
+                paddingRight={1}
+              >
+                <Show when={store.mode === "normal"}>
+                  <text flexShrink={0} fg={theme.textMuted}>
                     {local.model.parsed().model}
                   </text>
-                  <text fg={theme.textMuted} attributes={TextAttributes.ITALIC}>
-                    ({local.model.parsed().provider})
+                  <text fg={theme.textMuted}>
+                    <span style={{ opacity: 0.7 }}>({local.model.parsed().provider})</span>
                   </text>
-                  <Show when={showVariant()}>
-                    <text fg={theme.textMuted}>·</text>
-                    <box backgroundColor={theme.warning} paddingLeft={0.5} paddingRight={0.5}>
-                      <text fg={theme.background} attributes={TextAttributes.BOLD}>
-                        {local.model.variant.current()}
-                      </text>
-                    </box>
-                  </Show>
-                </box>
-              </Show>
+                </Show>
 
-              <box flexGrow={1} />
-              
-              <Show when={Object.values(sync.data.mcp).some(s => s.status !== "connected")}>
-                <OrcaStatusBadge status="warning" label="offline" />
-              </Show>
+                <Show when={status().type === "retry"}>
+                  <text fg={theme.warning} attributes={TextAttributes.ITALIC}>
+                    · {(status() as any).message?.slice(0, 20) + "..."}
+                  </text>
+                </Show>
+
+                <Show when={store.exitPress > 0}>
+                  <text fg={theme.primary}>
+                    ctrl+c <span style={{ fg: theme.primary, opacity: 0.8 }}>exit</span>
+                  </text>
+                </Show>
+
+                <box flexGrow={1} minWidth={1} />
+
+                <Show when={status().type !== "idle"}>
+                  <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
+                    <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={50} />
+                  </Show>
+                </Show>
+
+                <Show when={Object.values(sync.data.mcp).some((s) => s.status !== "connected")}>
+                  <text fg={warningFg()} bg={theme.warning}>
+                    {" OFFLINE "}
+                  </text>
+                </Show>
+
+                <Show when={status().type !== "idle"}>
+                  <text fg={store.interrupt > 0 ? theme.primary : theme.textMuted}>
+                    esc <span style={{ fg: theme.textMuted, opacity: 0.8 }}>interrupt</span>
+                  </text>
+                </Show>
+                <Show when={store.mode === "shell"}>
+                  <text fg={theme.textMuted}>
+                    esc <span style={{ fg: theme.textMuted, opacity: 0.8 }}>exit</span>
+                  </text>
+                </Show>
+              </box>
             </box>
           </box>
-        </OrcaPanel>
-        
-        <box flexDirection="row" justifyContent="space-between" marginTop={0.5}>
-          <Show when={status().type !== "idle"} fallback={<text />}>
-            <box
-              flexDirection="row"
-              gap={1}
-              flexGrow={1}
-              justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
-            >
-              <box flexShrink={0} flexDirection="row" gap={1}>
-                <box marginLeft={1}>
-                  <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
-                    <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
-                  </Show>
-                </box>
-                <box flexDirection="row" gap={1} flexShrink={0}>
-                  {(() => {
-                    const retry = createMemo(() => {
-                      const s = status()
-                      if (s.type !== "retry") return
-                      return s
-                    })
-                    const message = createMemo(() => {
-                      const r = retry()
-                      if (!r) return
-                      if (r.message.includes("exceeded your current quota") && r.message.includes("gemini"))
-                        return "gemini is way too hot right now"
-                      if (r.message.length > 80) return r.message.slice(0, 80) + "..."
-                      return r.message
-                    })
-                    const isTruncated = createMemo(() => {
-                      const r = retry()
-                      if (!r) return false
-                      return r.message.length > 120
-                    })
-                    const [seconds, setSeconds] = createSignal(0)
-                    onMount(() => {
-                      const timer = setInterval(() => {
-                        const next = retry()?.next
-                        if (next) setSeconds(Math.round((next - Date.now()) / 1000))
-                      }, 1000)
-
-                      onCleanup(() => {
-                        clearInterval(timer)
-                      })
-                    })
-                    const handleMessageClick = () => {
-                      const r = retry()
-                      if (!r) return
-                      if (isTruncated()) {
-                        DialogAlert.show(dialog, "Retry Error", r.message)
-                      }
-                    }
-
-                    const retryText = () => {
-                      const r = retry()
-                      if (!r) return ""
-                      const baseMessage = message()
-                      const truncatedHint = isTruncated() ? " (click to expand)" : ""
-                      const duration = formatDuration(seconds())
-                      const retryInfo = ` [retrying ${duration ? `in ${duration} ` : ""}attempt #${r.attempt}]`
-                      return baseMessage + truncatedHint + retryInfo
-                    }
-
-                    return (
-                      <Show when={retry()}>
-                        <box onMouseUp={handleMessageClick}>
-                          <text fg={theme.error}>{retryText()}</text>
-                        </box>
-                      </Show>
-                    )
-                  })()}
-                </box>
-              </box>
-              <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
-                esc{" "}
-                <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
-                  {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
-                </span>
-              </text>
-            </box>
-          </Show>
-          <Show when={status().type !== "retry"}>
-            <box gap={2} flexDirection="row">
-              {/* kilocode_change start - show "ctrl+c again to exit" hint */}
-              <Show when={store.exitPress > 0}>
-                <text fg={theme.primary}>
-                  ctrl+c <span style={{ fg: theme.primary }}>again to exit</span>
-                </text>
-              </Show>
-              {/* kilocode_change end */}
-              <Switch>
-                <Match when={store.mode === "normal"}>
-                  <Show when={local.model.variant.list().length > 0}>
-                    <text fg={theme.text}>
-                      {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
-                    </text>
-                  </Show>
-                  <text fg={theme.text}>
-                    {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>agents</span>
-                  </text>
-                  <text fg={theme.text}>
-                    {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
-                  </text>
-                </Match>
-                <Match when={store.mode === "shell"}>
-                  <text fg={theme.text}>
-                    esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
-                  </text>
-                </Match>
-              </Switch>
-            </box>
-          </Show>
         </box>
       </box>
     </>

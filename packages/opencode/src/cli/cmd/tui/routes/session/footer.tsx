@@ -49,41 +49,50 @@ export function Footer() {
   })
 
   return (
-    <box flexDirection="row" justifyContent="space-between" gap={1} flexShrink={0}>
-      <text fg={theme.primary}>Orca</text>
-      <text fg={theme.textMuted}>│</text>
-      <text fg={theme.textMuted}>{directory()}</text>
+    <box
+      flexDirection="row"
+      justifyContent="space-between"
+      gap={1}
+      flexShrink={0}
+      backgroundColor={theme.primary}
+      paddingLeft={1}
+      paddingRight={1}
+      width="100%"
+    >
+      <box flexDirection="row" gap={1}>
+        <text fg={theme.background} attributes={1}>Orca</text>
+        <text fg={theme.background} attributes={2}>│</text>
+        <text fg={theme.background} attributes={2}>{directory()}</text>
+      </box>
       <box gap={2} flexDirection="row" flexShrink={0}>
         <Switch>
           <Match when={store.welcome}>
-            <text fg={theme.accent}>
-              Get started <span style={{ fg: theme.textMuted }}>/connect</span>
+            <text fg={theme.background} attributes={2}>
+              Get started <span style={{ fg: theme.background, opacity: 0.7 }}>/connect</span>
             </text>
           </Match>
           <Match when={connected()}>
             <Show when={permissions().length > 0}>
-              <text fg={theme.warning}>
-                <span style={{ fg: theme.warning }}>△</span> {permissions().length} Permission
-                {permissions().length > 1 ? "s" : ""}
+              <text fg={theme.background} attributes={1}>
+                △ {permissions().length} Permission{permissions().length > 1 ? "s" : ""}
               </text>
             </Show>
-            <text fg={theme.text}>
-              <span style={{ fg: lsp().length > 0 ? theme.success : theme.textMuted }}>●</span> {lsp().length} LSP
+            <text fg={theme.background} attributes={1 | 2}> {/* BOLD | ITALIC */}
+              TAB <span style={{ italic: true, bold: false }}>AGENTS</span>
+            </text>
+            <text fg={theme.background} attributes={1 | 2}>
+              CTRL+P <span style={{ italic: true, bold: false }}>COMMANDS</span>
+            </text>
+            <text fg={theme.background}>
+              <span style={{ fg: theme.background }}>●</span> {lsp().length} LSP
             </text>
             <Show when={mcp()}>
-              <text fg={theme.text}>
-                <Switch>
-                  <Match when={mcpError()}>
-                    <span style={{ fg: theme.error }}>◉ </span>
-                  </Match>
-                  <Match when={true}>
-                    <span style={{ fg: theme.success }}>◉ </span>
-                  </Match>
-                </Switch>
+              <text fg={theme.background}>
+                <span style={{ fg: lsp().length > 0 ? theme.background : theme.background, opacity: 0.7 }}>◉ </span>
                 {mcp()} MCP
               </text>
             </Show>
-            <text fg={theme.textMuted}>/status</text>
+            <text fg={theme.background} attributes={2}>/status</text>
           </Match>
         </Switch>
       </box>

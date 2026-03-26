@@ -139,7 +139,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
 
   return (
     <Show when={session()}>
-      <OrcaPanel width={42} height="100%" padding={1} borderStyle="rounded" borderColor={theme.accent}>
+      <OrcaPanel width={42} height="100%" padding={1}>
         <scrollbox
           flexGrow={1}
           verticalScrollbarOptions={{

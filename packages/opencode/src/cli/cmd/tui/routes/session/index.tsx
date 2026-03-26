@@ -1081,7 +1081,7 @@ export function Session() {
       <box flexDirection="row">
         <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={1} gap={1}>
           <Show when={session()}>
-            <OrcaPanel title={session()?.title} borderStyle="rounded" padding={1}>
+            <OrcaPanel title={session()?.title} padding={1}>
               <Show when={showHeader() && (!sidebarVisible() || !wide())}>
                 <Header />
               </Show>
@@ -1223,8 +1223,8 @@ export function Session() {
                   sessionID={route.sessionID}
                 />
               </box>
-              <Footer />
             </OrcaPanel>
+            <Footer />
           </Show>
           <Toast />
         </box>
@@ -1289,8 +1289,7 @@ function UserMessage(props: {
       <Show when={text()}>
         <box marginTop={props.index === 0 ? 0 : 1} marginBottom={1}>
           <OrcaPanel 
-            borderStyle="rounded" 
-            borderColor={color()} 
+            borderColor={theme.border}
             padding={1}
             bgColor="panel"
           >

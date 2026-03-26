@@ -71,7 +71,7 @@ export function Header() {
 
   return (
     <box flexShrink={0} marginBottom={1}>
-      <OrcaPanel borderStyle="rounded" borderColor={theme.accent} padding={0.5}>
+      <OrcaPanel padding={0.5}>
         <Switch>
           <Match when={session()?.parentID}>
             <box flexDirection="column" gap={0.5}>

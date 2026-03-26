@@ -114,14 +114,14 @@ export function Home() {
   return (
     <>
       <box flexGrow={1} alignItems="center" paddingLeft={4} paddingRight={4} justifyContent="center">
-        <box width="100%" maxWidth={85}>
-          <OrcaPanel title="ORCA" borderStyle="rounded" borderColor={theme.accent} padding={2}>
+        <box width="100%" maxWidth={120}>
+          <OrcaPanel title="ORCA" metadata="MOD-01 // CODENAME: ORCA" padding={2}>
             <box alignItems="center" width="100%">
               <box marginBottom={2}>
                 <Logo />
               </box>
 
-              <box width="100%" maxWidth={75} zIndex={1000} marginBottom={2}>
+              <box width="100%" maxWidth={110} zIndex={1000} marginBottom={2}>
                 <Prompt
                   ref={(r) => {
                     prompt = r
@@ -131,7 +131,7 @@ export function Home() {
                 />
               </box>
 
-              <box width="100%" maxWidth={75} flexDirection="row" gap={2}>
+              <box width="100%" maxWidth={110} flexDirection="row" gap={2}>
                 <Show when={!newsHidden()}>
                   <box flexGrow={1} flexBasis={0}>
                     <KiloNews />
@@ -155,25 +155,16 @@ export function Home() {
         <Toast />
       </box>
 
-      <box paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0} gap={2} backgroundColor={theme.backgroundPanel}>
-        <text fg={theme.accent} attributes={TextAttributes.BOLD}>
-          Orca
-        </text>
-
-        <text fg={theme.textMuted}>│</text>
-        <text fg={theme.textMuted}>{directory()}</text>
-        <box gap={1} flexDirection="row" flexShrink={0}>
-          <Show when={mcp()}>
-            <OrcaStatusBadge
-              status={mcpError() ? "error" : connectedMcpCount() > 0 ? "success" : "idle"}
-              label={`${connectedMcpCount()} MCP`}
-            />
-            <text fg={theme.textMuted}>/status</text>
-          </Show>
-        </box>
+      <box paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0} gap={2}>
+        <Show when={mcp()}>
+          <OrcaStatusBadge
+            status={mcpError() ? "error" : connectedMcpCount() > 0 ? "success" : "idle"}
+            label={`${connectedMcpCount()} MCP`}
+          />
+        </Show>
         <box flexGrow={1} />
         <box flexShrink={0}>
-          <text fg={theme.accent}>v{Installation.VERSION}</text>
+          <text fg={theme.textMuted}>{directory()}</text>
         </box>
       </box>
     </>

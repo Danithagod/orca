@@ -488,7 +488,7 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
       all: () => getWorkspace()?.all() ?? [],
       active: () => getWorkspace()?.active(),
       new: () => getWorkspace()?.new(),
-      attach: (pty: { id: string; title?: string }) => getWorkspace()?.attach(pty),
+      attach: (pty: { id: string; title?: string; status?: LocalPTY["status"] }) => getWorkspace()?.attach(pty),
       write: (id: string, data: string) => getWorkspace()?.write(id, data),
       subscribe: (id: string, fn: (data: string) => void) => getWorkspace()?.subscribe(id, fn),
       update: (pty: Partial<LocalPTY> & { id: string }) => getWorkspace()?.update(pty),

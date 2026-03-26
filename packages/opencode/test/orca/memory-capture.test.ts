@@ -4,7 +4,7 @@ import os from "os"
 import fs from "fs/promises"
 import { MemoryEngine } from "../../src/orca/memory"
 import { Config } from "../../src/orca/config"
-import { ContextHooks } from "../../src/orca/memory/context-hooks"
+import { ContextHooks, type ToolContext } from "../../src/orca/memory/context-hooks"
 
 describe("Memory Capture Flow", () => {
   let tmpDir: string
@@ -183,13 +183,16 @@ describe("Memory Capture Flow", () => {
       const sessionId = "test-session-custom"
       const customRule = {
         toolName: "custom",
-        shouldCapture: (ctx: { success: boolean }) => ctx.success,
-        extractMemory: (ctx: { input: { data: string } }) => ({
-          key: `custom:${ctx.input.data}`,
-          title: "Custom memory",
-          content: ctx.input.data,
-          category: "context" as const,
-        }),
+        shouldCapture: (ctx: ToolContext) => ctx.success,
+        extractMemory: (ctx: ToolContext) => {
+          const data = ctx.input.data as string
+          return {
+            key: `custom:${data}`,
+            title: "Custom memory",
+            content: data,
+            category: "context" as const,
+          }
+        },
       }
 
       ContextHooks.addRule(customRule)

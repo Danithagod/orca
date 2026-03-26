@@ -58,6 +58,15 @@ export const OrcaBorder = {
     horizontal: "━",
     vertical: "┃",
   },
+  futuristic: {
+    ...EmptyBorder,
+    topLeft: "⌜",
+    topRight: "⌝",
+    bottomLeft: "⌞",
+    bottomRight: "⌟",
+    horizontal: "─",
+    vertical: "│",
+  },
 }
 
 export type OrcaBorderStyle = keyof typeof OrcaBorder

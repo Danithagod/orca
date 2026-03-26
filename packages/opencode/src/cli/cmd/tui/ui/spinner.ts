@@ -243,7 +243,7 @@ export function deriveInactiveColor(brightColor: ColorInput, factor: number = 0.
   return RGBA.fromValues(baseRgba.r, baseRgba.g, baseRgba.b, factor)
 }
 
-export type KnightRiderStyle = "blocks" | "diamonds" | "orca" | "sonar" | "ripple" | "wave" | "biowave"
+export type KnightRiderStyle = "blocks" | "diamonds" | "orca" | "sonar" | "ripple" | "wave" | "biowave" | "slash"
 
 export interface KnightRiderOptions {
   width?: number
@@ -358,6 +358,11 @@ export function createFrames(options: KnightRiderOptions = {}): string[] {
           return heights[index]
         }
         return "·"
+      }
+
+      if (style === "slash") {
+        const isActive = index >= 0 && index < trailOptions.colors.length
+        return isActive ? "/" : " "
       }
 
       // Default to blocks

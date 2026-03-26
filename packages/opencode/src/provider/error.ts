@@ -26,7 +26,12 @@ export namespace ProviderError {
     const status = e.statusCode
     if (!status) return e.isRetryable
     // openai sometimes returns 404 for models that are actually available
-    return status === 404 || e.isRetryable
+    return status === 404 || isRetryableStatus(status) || e.isRetryable
+  }
+
+  function isRetryableStatus(status?: number) {
+    if (!status) return false
+    return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500
   }
 
   // Providers not reliably handled in this function:
@@ -193,7 +198,7 @@ export namespace ProviderError {
       statusCode: input.error.statusCode,
       isRetryable: input.providerID.startsWith("openai")
         ? isOpenAiErrorRetryable(input.error)
-        : input.error.isRetryable,
+        : isRetryableStatus(input.error.statusCode) || input.error.isRetryable,
       responseHeaders: input.error.responseHeaders,
       responseBody: input.error.responseBody,
       metadata,

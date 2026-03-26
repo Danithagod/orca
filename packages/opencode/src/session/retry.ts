@@ -69,6 +69,9 @@ export namespace SessionRetry {
       if (!error.data.isRetryable) return undefined
       if (error.data.responseBody?.includes("FreeUsageLimitError"))
         return `Free usage exceeded, add credits https://app.kilo.ai` // kilocode_change
+      if (error.data.statusCode && error.data.statusCode >= 500) {
+        return "Provider is temporarily unavailable"
+      }
       return error.data.message.includes("Overloaded") ? "Provider is overloaded" : error.data.message
     }
 

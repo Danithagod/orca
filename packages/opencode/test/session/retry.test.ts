@@ -122,6 +122,16 @@ describe("session.retry.retryable", () => {
 
     expect(SessionRetry.retryable(error)).toBeUndefined()
   })
+
+  test("maps retryable 5xx api errors to a friendlier status", () => {
+    const error = new MessageV2.APIError({
+      message: "Internal Server Error",
+      statusCode: 500,
+      isRetryable: true,
+    }).toObject() as MessageV2.APIError
+
+    expect(SessionRetry.retryable(error)).toBe("Provider is temporarily unavailable")
+  })
 })
 
 describe("session.message-v2.fromError", () => {
@@ -184,6 +194,20 @@ describe("session.message-v2.fromError", () => {
       isRetryable: false,
     })
     const result = MessageV2.fromError(error, { providerID: "openai" }) as MessageV2.APIError
+    expect(result.data.isRetryable).toBe(true)
+  })
+
+  test("marks 500 status codes as retryable for kilo", () => {
+    const error = new APICallError({
+      message: "Internal Server Error",
+      url: "https://api.kilo.ai/api/openrouter/chat/completions",
+      requestBodyValues: {},
+      statusCode: 500,
+      responseHeaders: { "content-type": "application/json" },
+      responseBody: '{"error":"boom"}',
+      isRetryable: false,
+    })
+    const result = MessageV2.fromError(error, { providerID: "kilo" }) as MessageV2.APIError
     expect(result.data.isRetryable).toBe(true)
   })
 })

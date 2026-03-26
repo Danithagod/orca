@@ -24,6 +24,7 @@ import { KeybindProvider } from "@tui/context/keybind"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
+
 import { PromptHistoryProvider } from "./component/prompt/history"
 import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
@@ -774,6 +775,7 @@ function App() {
       }}
       onMouseUp={Flag.KILO_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)}
     >
+
       <Switch>
         <Match when={route.data.type === "home"}>
           <Home />

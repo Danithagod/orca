@@ -3,23 +3,27 @@ import { type JSX, Show, For } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { RGBA, TextAttributes } from "@opentui/core"
 
-import { OrcaBorder } from "./border"
+import { OrcaBorder, type OrcaBorderStyle } from "./border"
 
 // Orca Panel Component - Box with rounded corners
 export interface OrcaPanelProps {
   children: JSX.Element
   title?: string
   padding?: number
-  borderStyle?: "rounded" | "solid"
+  borderStyle?: OrcaBorderStyle | "none"
   borderColor?: RGBA
   bgColor?: "panel" | "element" | "background"
   width?: number | "auto" | `${number}%`
   height?: number | "auto" | `${number}%`
+  metadata?: string
 }
 
 export function OrcaPanel(props: OrcaPanelProps) {
   const { theme } = useTheme()
-  const chars = () => (props.borderStyle === "solid" ? OrcaBorder.solid : OrcaBorder.rounded)
+  const chars = () => {
+    if (props.borderStyle === "none") return undefined
+    return (OrcaBorder as any)[props.borderStyle ?? "futuristic"]
+  }
   const padding = () => props.padding ?? 1
 
   const bgColor = () => {
@@ -39,13 +43,20 @@ export function OrcaPanel(props: OrcaPanelProps) {
       width={props.width}
       height={props.height}
       padding={padding()}
-      border={["top", "bottom", "left", "right"]}
+      border={props.borderStyle === "none" ? undefined : ["top", "bottom", "left", "right"]}
       borderColor={props.borderColor ?? theme.border}
       customBorderChars={chars()}
-      title={props.title ? ` ${props.title} ` : undefined}
+      title={props.title ? ` [ ${props.title.toUpperCase()}_ ] ` : undefined}
     >
       <box flexDirection="column" flexGrow={1}>
         {props.children}
+        <Show when={props.metadata}>
+          <box marginTop="auto" paddingTop={1} border={["top"]} borderColor={theme.border} customBorderChars={OrcaBorder.solid}>
+            <text fg={theme.textMuted}>
+              ▪ {props.metadata?.toUpperCase()}
+            </text>
+          </box>
+        </Show>
       </box>
     </box>
   )
@@ -105,7 +116,7 @@ export function OrcaCard(props: OrcaCardProps) {
       marginBottom={1}
       border={["top", "bottom", "left", "right"]}
       borderColor={theme.border}
-      customBorderChars={OrcaBorder.rounded}
+      customBorderChars={OrcaBorder.futuristic}
     >
       {/* Header with status */}
       <box flexDirection="row" marginBottom={1}>
@@ -180,9 +191,19 @@ export function OrcaStatusBadge(props: OrcaStatusBadgeProps) {
   }
 
   return (
-    <box flexDirection="row" alignItems="center" gap={1}>
-      <text fg={color()}>{indicator()}</text>
-      <text fg={theme.text}>{props.label}</text>
+    <box
+      flexDirection="row"
+      alignItems="center"
+      backgroundColor={props.status === "active" ? theme.accent : theme.backgroundElement}
+      paddingLeft={1}
+      paddingRight={1}
+      border={["top", "bottom", "left", "right"]}
+      borderColor={color()}
+      customBorderChars={OrcaBorder.solid}
+    >
+      <text fg={props.status === "active" ? theme.background : color()} attributes={TextAttributes.BOLD}>
+        {props.label.toUpperCase()}
+      </text>
     </box>
   )
 }
@@ -202,16 +223,24 @@ export function OrcaProgressBar(props: OrcaProgressBarProps) {
   const filled = () => Math.round((props.percent / 100) * width())
   const empty = () => width() - filled()
 
-  const bar = () => "█".repeat(filled()) + "░".repeat(empty())
+  const bar = () => {
+    const segment = "■"
+    const bgSegment = "□"
+    return segment.repeat(filled()) + bgSegment.repeat(empty())
+  }
 
   return (
     <box flexDirection="row" alignItems="center">
-      <text fg={theme.primary}>[</text>
+      <text fg={theme.primary}>[ </text>
       <text fg={theme.accent}>{bar()}</text>
-      <text fg={theme.primary}>]</text>
+      <text fg={theme.primary}> ]</text>
       <Show when={props.showLabel}>
         <text fg={theme.text}> </text>
-        <text fg={theme.accent}>{props.percent}%</text>
+        <box border={["left", "right", "top", "bottom"]} borderColor={theme.border} paddingLeft={1} paddingRight={1}>
+          <text fg={theme.accent} attributes={TextAttributes.BOLD}>
+            {props.percent}%
+          </text>
+        </box>
       </Show>
     </box>
   )
@@ -269,7 +298,7 @@ export function OrcaList(props: OrcaListProps) {
             paddingBottom={0}
             backgroundColor={item.selected ? theme.backgroundElement : undefined}
           >
-            <text fg={theme.accent}>►</text>
+            <text fg={item.selected ? theme.primary : theme.accent}>[ {item.selected ? "●" : " "} ]</text>
             <text fg={theme.text}> </text>
             <text
               fg={item.selected ? theme.primary : theme.text}
@@ -278,7 +307,7 @@ export function OrcaList(props: OrcaListProps) {
               {item.label}
             </text>
             <Show when={item.description}>
-              <text fg={theme.textMuted}> - {item.description}</text>
+              <text fg={theme.textMuted}> // {item.description}</text>
             </Show>
           </box>
         )}
