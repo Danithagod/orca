@@ -41,6 +41,7 @@ export function formatTranscript(
 }
 
 export function formatMessage(msg: UserMessage | AssistantMessage, parts: Part[], options: TranscriptOptions): string {
+  if (msg.role === "user" && (msg as { internal?: boolean }).internal) return ""
   let result = ""
 
   if (msg.role === "user") {

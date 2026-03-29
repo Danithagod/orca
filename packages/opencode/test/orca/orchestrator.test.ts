@@ -73,6 +73,28 @@ describe("Orchestrator", () => {
 
       expect(task.priority).toBe("high")
     })
+
+    test("preserves tasks across repeated init for the same project", async () => {
+      const task = await Orchestrator.createTask({
+        title: "Sticky Task",
+        description: "Should survive tool re-entry",
+        type: "generic",
+        input: {},
+      })
+
+      const agent = await Orchestrator.registerAgent({ type: "architect" })
+      const result = await Orchestrator.init({ projectPath: tmpDir })
+
+      expect(result.preserved).toBe(true)
+      expect(result.tasks).toBe(1)
+      expect(result.agents).toBe(1)
+
+      const foundTask = await Orchestrator.getTask({ taskId: task.id })
+      const foundAgent = await Orchestrator.getAgent({ agentId: agent.id })
+
+      expect(foundTask?.id).toBe(task.id)
+      expect(foundAgent?.id).toBe(agent.id)
+    })
   })
 
   describe("routeTask", () => {

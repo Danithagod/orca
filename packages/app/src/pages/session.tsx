@@ -502,7 +502,7 @@ export default function Page() {
   })
 
   const userMessages = createMemo(
-    () => messages().filter((m) => m.role === "user") as UserMessage[],
+    () => messages().filter((m) => m.role === "user" && !(m as { internal?: boolean }).internal) as UserMessage[],
     emptyUserMessages,
     { equals: same },
   )

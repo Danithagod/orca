@@ -1,14 +1,22 @@
-// kilocode_change - Orca UI Components
-import { type JSX, Show, For } from "solid-js"
-import { useTheme } from "@tui/context/theme"
-import { RGBA, TextAttributes } from "@opentui/core"
+import { TextAttributes, type RGBA } from "@opentui/core"
+import { selectedForeground, useTheme } from "@tui/context/theme"
+import { For, Show, type JSX } from "solid-js"
+import { useKV } from "@tui/context/kv"
+import "opentui-spinner/solid"
 
-import { OrcaBorder, type OrcaBorderStyle } from "./border"
+import type { OrcaBorderStyle } from "./border"
 
-// Orca Panel Component - Box with rounded corners
+const DOT_LINE = "· ".repeat(160)
+const BADGE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+type PanelVariant = "frame" | "panel" | "card"
+
 export interface OrcaPanelProps {
   children: JSX.Element
   title?: string
+  titleRight?: string
+  subtitle?: string
+  footer?: string
   padding?: number
   borderStyle?: OrcaBorderStyle | "none"
   borderColor?: RGBA
@@ -16,19 +24,36 @@ export interface OrcaPanelProps {
   width?: number | "auto" | `${number}%`
   height?: number | "auto" | `${number}%`
   metadata?: string
+  variant?: PanelVariant
+  inset?: boolean
+}
+
+export function OrcaDots(props: { rows?: number; fg?: RGBA }) {
+  const { theme } = useTheme()
+  const rows = () => props.rows ?? 1
+  return (
+    <box flexDirection="column" width="100%">
+      <For each={Array.from({ length: rows() })}>
+        {() => (
+          <text fg={props.fg ?? theme.borderSubtle} wrapMode="none">
+            {DOT_LINE}
+          </text>
+        )}
+      </For>
+    </box>
+  )
 }
 
 export function OrcaPanel(props: OrcaPanelProps) {
   const { theme } = useTheme()
-  const chars = () => {
-    if (props.borderStyle === "none") return undefined
-    return (OrcaBorder as any)[props.borderStyle ?? "futuristic"]
-  }
-  const padding = () => props.padding ?? 1
-
-  const bgColor = () => {
+  const variant = () => props.variant ?? "panel"
+  const inset = () => props.inset ?? variant() !== "card"
+  const outerColor = () => props.borderColor ?? (variant() === "frame" ? theme.borderActive : theme.border)
+  const innerColor = () => (variant() === "frame" ? theme.border : theme.borderSubtle)
+  const outerBg = () => (variant() === "frame" ? theme.backgroundPanel : surface())
+  const surface = () => {
     switch (props.bgColor) {
-      case "element" :
+      case "element":
         return theme.backgroundElement
       case "background":
         return theme.background
@@ -36,157 +61,189 @@ export function OrcaPanel(props: OrcaPanelProps) {
         return theme.backgroundPanel
     }
   }
+  const chars = () => {
+    if (props.borderStyle === "none") return undefined
+    return undefined
+  }
+  const padding = () => props.padding ?? 1
+  const showHeader = () => Boolean(props.title || props.titleRight || props.subtitle)
+  const showFooter = () => Boolean(props.footer || props.metadata)
 
   return (
     <box
-      backgroundColor={bgColor()}
+      backgroundColor={outerBg()}
       width={props.width}
       height={props.height}
       padding={padding()}
       border={props.borderStyle === "none" ? undefined : ["top", "bottom", "left", "right"]}
-      borderColor={props.borderColor ?? theme.border}
+      borderColor={outerColor()}
       customBorderChars={chars()}
-      title={props.title ? ` [ ${props.title.toUpperCase()}_ ] ` : undefined}
+      flexDirection="column"
+      gap={0}
     >
-      <box flexDirection="column" flexGrow={1}>
-        {props.children}
-        <Show when={props.metadata}>
-          <box marginTop="auto" paddingTop={1} border={["top"]} borderColor={theme.border} customBorderChars={OrcaBorder.solid}>
-            <text fg={theme.textMuted}>
-              ▪ {props.metadata?.toUpperCase()}
-            </text>
+      <Show when={showHeader()}>
+        <box flexDirection="column" gap={0} flexShrink={0}>
+          <box flexDirection="row" alignItems="center" gap={1}>
+            <box flexDirection="row" gap={1} flexGrow={1} flexShrink={1} minWidth={1}>
+              <Show when={props.title}>
+                <text fg={theme.primary} attributes={TextAttributes.BOLD} wrapMode="none">
+                  {props.title}
+                </text>
+              </Show>
+              <Show when={props.subtitle}>
+                <text fg={theme.textMuted} wrapMode="none">
+                  {props.subtitle}
+                </text>
+              </Show>
+            </box>
+            <box flexGrow={1} minWidth={1} />
+            <Show when={props.titleRight}>
+              <text fg={theme.text} attributes={TextAttributes.BOLD} wrapMode="none" flexShrink={0}>
+                {props.titleRight}
+              </text>
+            </Show>
           </box>
-        </Show>
+          <OrcaDots />
+        </box>
+      </Show>
+
+      <box
+        flexDirection="column"
+        flexGrow={1}
+        gap={0}
+        backgroundColor={surface()}
+        border={inset() ? ["top", "bottom", "left", "right"] : undefined}
+        borderColor={inset() ? innerColor() : undefined}
+      >
+        {props.children}
       </box>
+
+      <Show when={showFooter()}>
+        <box flexDirection="column" gap={0} flexShrink={0}>
+          <OrcaDots fg={theme.borderSubtle} />
+          <box flexDirection="row" alignItems="center" gap={1}>
+            <Show when={props.footer}>
+              <text fg={theme.textMuted} wrapMode="none" minWidth={1} flexGrow={1} flexShrink={1}>
+                {props.footer}
+              </text>
+            </Show>
+            <box flexGrow={1} minWidth={1} />
+            <Show when={props.metadata}>
+              <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>
+                {props.metadata}
+              </text>
+            </Show>
+          </box>
+        </box>
+      </Show>
     </box>
   )
 }
 
-// Orca Card Component - Activity card with rounded corners
 export interface OrcaCardProps {
   title: string
   content: string
   status?: "pending" | "active" | "success" | "error" | "warning"
   timestamp?: string
   duration?: string
-  icon?: string
 }
 
 export function OrcaCard(props: OrcaCardProps) {
   const { theme } = useTheme()
-
-  const statusIcon = () => {
-    switch (props.status) {
-      case "pending":
-        return "○"
-      case "active":
-        return "◉"
-      case "success":
-        return "✓"
-      case "error":
-        return "✗"
-      case "warning":
-        return "!"
-      default:
-        return "○"
-    }
-  }
-
-  const statusColor = () => {
-    switch (props.status) {
-      case "pending":
-        return theme.textMuted
-      case "active":
-        return theme.accent
-      case "success":
-        return theme.success
-      case "error":
-        return theme.error
-      case "warning":
-        return theme.warning
-      default:
-        return theme.textMuted
-    }
-  }
-
   return (
-    <box
-      backgroundColor={theme.backgroundElement}
+    <OrcaPanel
+      bgColor="element"
+      variant="card"
+      title={props.title.toUpperCase()}
+      titleRight={props.status?.toUpperCase()}
+      footer={[props.duration, props.timestamp].filter(Boolean).join(" · ")}
       padding={1}
-      marginBottom={1}
-      border={["top", "bottom", "left", "right"]}
-      borderColor={theme.border}
-      customBorderChars={OrcaBorder.futuristic}
     >
-      {/* Header with status */}
-      <box flexDirection="row" marginBottom={1}>
-        <text fg={statusColor()}>{statusIcon()}</text>
-        <text fg={theme.text}> </text>
-        <text fg={theme.text} attributes={TextAttributes.BOLD}>
-          {props.title}
-        </text>
-      </box>
-
-      {/* Content */}
-      <box marginBottom={1}>
-        <text fg={theme.textMuted}>{props.content}</text>
-      </box>
-
-      {/* Footer with metadata */}
-      <box flexDirection="row">
-        <Show when={props.status}>
-          <text fg={statusColor()}>{props.status}</text>
-          <text fg={theme.textMuted}> │ </text>
-        </Show>
-        <Show when={props.duration}>
-          <text fg={theme.textMuted}>{props.duration}</text>
-          <text fg={theme.textMuted}> │ </text>
-        </Show>
-        <Show when={props.timestamp}>
-          <text fg={theme.textMuted}>{props.timestamp}</text>
-        </Show>
-      </box>
-    </box>
+      <text fg={theme.textMuted} wrapMode="word">
+        {props.content}
+      </text>
+    </OrcaPanel>
   )
 }
 
-// Orca Status Badge Component
 export interface OrcaStatusBadgeProps {
-  status: "idle" | "active" | "error" | "success" | "warning"
+  status: "idle" | "active" | "paused" | "error" | "success" | "warning" | "muted"
   label: string
-  size?: "sm" | "md" | "lg"
+  size?: "xs" | "sm" | "md" | "lg"
+  icon?: string
+  uppercase?: boolean
 }
 
 export function OrcaStatusBadge(props: OrcaStatusBadgeProps) {
   const { theme } = useTheme()
+  const kv = useKV()
 
-  const indicator = () => {
+  const tone = () => {
     switch (props.status) {
-      case "idle":
-        return "○"
       case "active":
-        return "◉"
-      case "success":
-        return "●"
-      case "error":
-        return "✗"
+        return theme.primary
+      case "paused":
+        return theme.warning
       case "warning":
-        return "!"
+        return theme.warning
+      case "error":
+        return theme.error
+      case "success":
+        return theme.success
+      case "idle":
+      case "muted":
+        return theme.textMuted
     }
   }
 
-  const color = () => {
+  const bg = () => {
+    switch (props.status) {
+      case "active":
+        return theme.backgroundElement
+      case "paused":
+        return theme.backgroundElement
+      case "warning":
+      case "error":
+      case "success":
+      case "idle":
+      case "muted":
+        return theme.backgroundElement
+    }
+  }
+
+  const border = () => {
     switch (props.status) {
       case "idle":
-        return theme.textMuted
+      case "muted":
+        return theme.border
       case "active":
-        return theme.accent
-      case "success":
-        return theme.success
-      case "error":
-        return theme.error
-      case "warning":
+        return theme.borderActive
+      case "paused":
         return theme.warning
+      case "warning":
+      case "error":
+      case "success":
+        return tone()
+    }
+  }
+
+  const fg = () => {
+    if (props.status === "active") return theme.primary
+    if (props.status === "paused") return theme.warning
+    if (props.status === "idle" || props.status === "muted") return theme.textMuted
+    return tone()
+  }
+
+  const pad = () => {
+    switch (props.size) {
+      case "xs":
+        return { left: 1, right: 1 }
+      case "sm":
+        return { left: 1, right: 1 }
+      case "lg":
+        return { left: 2, right: 2 }
+      default:
+        return { left: 1, right: 1 }
     }
   }
 
@@ -194,85 +251,90 @@ export function OrcaStatusBadge(props: OrcaStatusBadgeProps) {
     <box
       flexDirection="row"
       alignItems="center"
-      backgroundColor={props.status === "active" ? theme.accent : theme.backgroundElement}
-      paddingLeft={1}
-      paddingRight={1}
-      border={["top", "bottom", "left", "right"]}
-      borderColor={color()}
-      customBorderChars={OrcaBorder.solid}
+      backgroundColor={props.size === "xs" ? undefined : bg()}
+      paddingLeft={pad().left}
+      paddingRight={pad().right}
+      border={props.size === "xs" ? ["left", "right"] : ["top", "bottom", "left", "right"]}
+      borderColor={border()}
+      gap={props.icon || props.status === "active" ? 1 : 0}
+      flexShrink={0}
     >
-      <text fg={props.status === "active" ? theme.background : color()} attributes={TextAttributes.BOLD}>
-        {props.label.toUpperCase()}
+      <Show when={props.icon}>
+        <text fg={fg()} bg={props.size === "xs" ? undefined : bg()} attributes={TextAttributes.BOLD}>
+          {props.icon}
+        </text>
+      </Show>
+      <Show when={props.status === "active"}>
+        <Show
+          when={kv.get("animations_enabled", true)}
+          fallback={<text fg={fg()} bg={props.size === "xs" ? undefined : bg()} wrapMode="none">•</text>}
+        >
+          <spinner frames={BADGE_FRAMES} interval={80} color={fg()} />
+        </Show>
+      </Show>
+      <text fg={fg()} bg={props.size === "xs" ? undefined : bg()} attributes={TextAttributes.BOLD} wrapMode="none">
+        {props.uppercase === false ? props.label : props.label.toUpperCase()}
       </text>
     </box>
   )
 }
 
-// Orca Progress Bar Component
 export interface OrcaProgressBarProps {
   percent: number
   width?: number
   showLabel?: boolean
-  style?: "solid" | "gradient"
+  animate?: boolean
 }
 
 export function OrcaProgressBar(props: OrcaProgressBarProps) {
   const { theme } = useTheme()
-  const width = () => props.width ?? 40
-
-  const filled = () => Math.round((props.percent / 100) * width())
-  const empty = () => width() - filled()
-
-  const bar = () => {
-    const segment = "■"
-    const bgSegment = "□"
-    return segment.repeat(filled()) + bgSegment.repeat(empty())
+  const kv = useKV()
+  const width = () => props.width ?? 8
+  const percent = () => Math.max(0, Math.min(100, props.percent))
+  const enabled = () => kv.get("animations_enabled", true) && props.animate !== false
+  const filled = () => {
+    if (percent() <= 0) return 0
+    return Math.max(1, Math.round((percent() / 100) * width()))
   }
+  const empty = () => Math.max(0, width() - filled())
+  const fillColor = () => (enabled() ? theme.primary : theme.textMuted)
 
   return (
-    <box flexDirection="row" alignItems="center">
-      <text fg={theme.primary}>[ </text>
-      <text fg={theme.accent}>{bar()}</text>
-      <text fg={theme.primary}> ]</text>
+    <box flexDirection="row" alignItems="center" gap={1}>
+      <box flexDirection="row" alignItems="center" gap={0}>
+        <Show when={filled() > 0}>
+          <text fg={fillColor()} wrapMode="none">{Array(filled()).fill("■").join("")}</text>
+        </Show>
+        <Show when={empty() > 0}>
+          <text fg={theme.borderSubtle} wrapMode="none">{Array(empty()).fill("·").join("")}</text>
+        </Show>
+      </box>
       <Show when={props.showLabel}>
-        <text fg={theme.text}> </text>
-        <box border={["left", "right", "top", "bottom"]} borderColor={theme.border} paddingLeft={1} paddingRight={1}>
-          <text fg={theme.accent} attributes={TextAttributes.BOLD}>
-            {props.percent}%
-          </text>
-        </box>
+        <text fg={theme.textMuted}>{percent()}%</text>
       </Show>
     </box>
   )
 }
 
-// Orca Divider Component
-export function OrcaDivider(props: { title?: string; style?: "rounded" | "solid" | "double" }) {
+export function OrcaDivider(props: { title?: string }) {
   const { theme } = useTheme()
-
   return (
-    <box
-      width="100%"
-      height={1}
-      flexDirection="row"
-      alignItems="center"
-      marginTop={0.5}
-      marginBottom={0.5}
-    >
-      <box height={1} border={["top"]} borderColor={theme.border} width={2} marginTop={0.5} />
+    <box width="100%" flexDirection="row" alignItems="center" gap={1}>
+      <text fg={theme.borderSubtle} wrapMode="none" flexGrow={1}>
+        {DOT_LINE}
+      </text>
       <Show when={props.title}>
-        <box paddingLeft={1} paddingRight={1}>
-          <text fg={theme.accent} attributes={TextAttributes.BOLD}>
-            {props.title}
-          </text>
-        </box>
+        <text fg={theme.primary} attributes={TextAttributes.BOLD} wrapMode="none" flexShrink={0}>
+          {props.title}
+        </text>
       </Show>
-      <box height={1} border={["top"]} borderColor={theme.border} flexGrow={1} marginTop={0.5} />
+      <text fg={theme.borderSubtle} wrapMode="none" flexGrow={1}>
+        {DOT_LINE}
+      </text>
     </box>
   )
 }
 
-// Orca List Component
 export interface OrcaListItem {
   label: string
   description?: string
@@ -282,32 +344,25 @@ export interface OrcaListItem {
 
 export interface OrcaListProps {
   items: OrcaListItem[]
-  onSelect?: (index: number) => void
 }
 
 export function OrcaList(props: OrcaListProps) {
   const { theme } = useTheme()
-
   return (
-    <box flexDirection="column">
+    <box flexDirection="column" gap={1}>
       <For each={props.items}>
-        {(item, index) => (
+        {(item) => (
           <box
             flexDirection="row"
-            paddingTop={0}
-            paddingBottom={0}
+            paddingLeft={1}
+            paddingRight={1}
             backgroundColor={item.selected ? theme.backgroundElement : undefined}
+            gap={1}
           >
-            <text fg={item.selected ? theme.primary : theme.accent}>[ {item.selected ? "●" : " "} ]</text>
-            <text fg={theme.text}> </text>
-            <text
-              fg={item.selected ? theme.primary : theme.text}
-              attributes={item.selected ? TextAttributes.BOLD : undefined}
-            >
-              {item.label}
-            </text>
+            <text fg={item.selected ? theme.primary : theme.textMuted}>{item.selected ? "▣" : (item.icon ?? "·")}</text>
+            <text fg={item.selected ? theme.text : theme.text}>{item.label}</text>
             <Show when={item.description}>
-              <text fg={theme.textMuted}> // {item.description}</text>
+              <text fg={theme.textMuted}>- {item.description}</text>
             </Show>
           </box>
         )}

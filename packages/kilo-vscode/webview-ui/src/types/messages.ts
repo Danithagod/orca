@@ -1751,6 +1751,10 @@ export interface RetryConnectionRequest {
   type: "retryConnection"
 }
 
+export interface ClosePanelRequest {
+  type: "closePanel"
+}
+
 // Open a sub-agent session in a read-only editor panel
 export interface OpenSubAgentViewerRequest {
   type: "openSubAgentViewer"
@@ -1867,6 +1871,7 @@ export type WebviewMessage =
   | EnhancePromptRequest
   | OpenChangesRequest
   | RetryConnectionRequest
+  | ClosePanelRequest
   | OpenSubAgentViewerRequest
   | PreviewImageRequest
   | SetDefaultBaseBranchRequest

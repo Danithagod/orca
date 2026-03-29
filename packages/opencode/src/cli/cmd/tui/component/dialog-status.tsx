@@ -108,11 +108,13 @@ export function DialogStatus() {
             {(item) => (
               <box flexDirection="row" gap={1} marginTop={0.5}>
                 <OrcaStatusBadge
-                  status={item.status === "connected" ? "success" : "error"}
+                  status={item.status === "connected" ? "success" : item.status === "ready" ? "idle" : "error"}
                   label={item.id}
                 />
                 <box flexGrow={1} />
-                <text fg={theme.textMuted} wrapMode="none">{path.basename(item.root)}</text>
+                <text fg={theme.textMuted} wrapMode="none">
+                  {item.status === "connected" ? `attached ${path.basename(item.root)}` : `${item.status} ${path.basename(item.root)}`}
+                </text>
               </box>
             )}
           </For>

@@ -1,135 +1,68 @@
-import { type Accessor, createMemo, createSignal, Match, Show, Switch } from "solid-js"
-import { useRouteData } from "@tui/context/route"
-import { useSync } from "@tui/context/sync"
-import { pipe, sumBy } from "remeda"
-import { useTheme } from "@tui/context/theme"
-import { SplitBorder, OrcaBorder } from "@tui/component/border"
-import type { AssistantMessage, Session } from "@kilocode/sdk/v2"
-import { useCommandDialog } from "@tui/component/dialog-command"
-import { useKeybind } from "../../context/keybind"
-import { useTerminalDimensions } from "@opentui/solid"
+import { createSignal, onCleanup, onMount, Show } from "solid-js"
 import { TextAttributes } from "@opentui/core"
 
-const Title = (props: { session: Accessor<Session> }) => {
+import { selectedForeground, useTheme } from "@tui/context/theme"
+
+import { OrcaBorder } from "../../component/border"
+
+export function Header(props: { child?: boolean; onBack?: () => void }) {
   const { theme } = useTheme()
-  return (
-    <text fg={theme.accent} attributes={TextAttributes.BOLD}>
-      # {props.session().title}
-    </text>
-  )
-}
+  const [stamp, setStamp] = createSignal(new Date().toISOString())
 
-const ContextInfo = (props: { context: Accessor<string | undefined>; cost: Accessor<string> }) => {
-  const { theme } = useTheme()
-  return (
-    <Show when={props.context()}>
-      <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>
-        {props.context()} ({props.cost()})
-      </text>
-    </Show>
-  )
-}
-
-import { OrcaDivider, OrcaPanel } from "../../component/orca-ui"
-
-export function Header() {
-  const route = useRouteData("session")
-  const sync = useSync()
-  const session = createMemo(() => sync.session.get(route.sessionID)!)
-  const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
-
-  const cost = createMemo(() => {
-    const total = pipe(
-      messages(),
-      sumBy((x) => (x.role === "assistant" ? x.cost : 0)),
-    )
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(total)
+  onMount(() => {
+    const timer = setInterval(() => setStamp(new Date().toISOString()), 1000)
+    onCleanup(() => clearInterval(timer))
   })
-
-  const context = createMemo(() => {
-    const last = messages().findLast((x) => x.role === "assistant" && x.tokens.output > 0) as AssistantMessage
-    if (!last) return
-    const total =
-      last.tokens.input + last.tokens.output + last.tokens.reasoning + last.tokens.cache.read + last.tokens.cache.write
-    const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
-    let result = total.toLocaleString()
-    if (model?.limit.context) {
-      result += "  " + Math.round((total / model.limit.context) * 100) + "%"
-    }
-    return result
-  })
-
-  const { theme } = useTheme()
-  const keybind = useKeybind()
-  const command = useCommandDialog()
-  const [hover, setHover] = createSignal<"parent" | "prev" | "next" | null>(null)
-  const dimensions = useTerminalDimensions()
-  const narrow = createMemo(() => dimensions().width < 80)
-
   return (
-    <box flexShrink={0} marginBottom={1}>
-      <OrcaPanel padding={0.5}>
-        <Switch>
-          <Match when={session()?.parentID}>
-            <box flexDirection="column" gap={0.5}>
-              <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={narrow() ? 0.5 : 0}>
-                <text fg={theme.primary} attributes={TextAttributes.BOLD}>
-                  Subagent session
-                </text>
-                <ContextInfo context={context} cost={cost} />
-              </box>
-              <OrcaDivider />
-              <box flexDirection="row" gap={2}>
-                <box
-                  onMouseOver={() => setHover("parent")}
-                  onMouseOut={() => setHover(null)}
-                  onMouseUp={() => command.trigger("session.parent")}
-                  backgroundColor={hover() === "parent" ? theme.backgroundElement : theme.backgroundPanel}
-                  paddingLeft={1}
-                  paddingRight={1}
-                >
-                  <text fg={theme.text}>
-                    Parent <span style={{ fg: theme.textMuted }}>{keybind.print("session_parent")}</span>
-                  </text>
-                </box>
-                <box
-                  onMouseOver={() => setHover("prev")}
-                  onMouseOut={() => setHover(null)}
-                  onMouseUp={() => command.trigger("session.child.previous")}
-                  backgroundColor={hover() === "prev" ? theme.backgroundElement : theme.backgroundPanel}
-                  paddingLeft={1}
-                  paddingRight={1}
-                >
-                  <text fg={theme.text}>
-                    Prev <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle_reverse")}</span>
-                  </text>
-                </box>
-                <box
-                  onMouseOver={() => setHover("next")}
-                  onMouseOut={() => setHover(null)}
-                  onMouseUp={() => command.trigger("session.child.next")}
-                  backgroundColor={hover() === "next" ? theme.backgroundElement : theme.backgroundPanel}
-                  paddingLeft={1}
-                  paddingRight={1}
-                >
-                  <text fg={theme.text}>
-                    Next <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle")}</span>
-                  </text>
-                </box>
-              </box>
+    <box flexShrink={0} marginBottom={1} width="100%">
+      <box
+        flexDirection="row"
+        justifyContent="space-between"
+        alignItems="center"
+        gap={1}
+        backgroundColor={theme.primary}
+        paddingLeft={1}
+        paddingRight={1}
+        width="100%"
+      >
+        <box flexDirection="row" gap={1} minWidth={1} flexShrink={1}>
+          <Show when={props.child}>
+            <box
+              flexDirection="row"
+              gap={1}
+              alignItems="center"
+              onMouseUp={() => props.onBack?.()}
+              paddingRight={1}
+              border={["right"]}
+              borderColor={selectedForeground(theme, theme.primary)}
+            >
+              <text
+                fg={selectedForeground(theme, theme.primary)}
+                bg={theme.primary}
+                attributes={TextAttributes.BOLD}
+                wrapMode="none"
+              >
+                ESC
+              </text>
+              <text fg={selectedForeground(theme, theme.primary)} bg={theme.primary} wrapMode="none">
+                Back
+              </text>
             </box>
-          </Match>
-          <Match when={true}>
-            <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={1}>
-              <Title session={session} />
-              <ContextInfo context={context} cost={cost} />
-            </box>
-          </Match>
-        </Switch>
-      </OrcaPanel>
+          </Show>
+          <text fg={selectedForeground(theme, theme.primary)} bg={theme.primary} attributes={TextAttributes.BOLD} wrapMode="none">
+            SESSION LOG
+          </text>
+          <text fg={selectedForeground(theme, theme.primary)} bg={theme.primary}>
+            -
+          </text>
+          <text fg={selectedForeground(theme, theme.primary)} bg={theme.primary} wrapMode="none">
+            {stamp()}
+          </text>
+        </box>
+        <text fg={selectedForeground(theme, theme.primary)} bg={theme.primary} attributes={TextAttributes.BOLD} wrapMode="none" flexShrink={0}>
+          ORCA
+        </text>
+      </box>
     </box>
   )
 }

@@ -284,6 +284,21 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
         subtitle: input.description,
       }
     }
+    case "agent_spawn": {
+      const type =
+        typeof input.type === "string" && input.type ? input.type[0]!.toUpperCase() + input.type.slice(1) : undefined
+      return {
+        icon: "task",
+        title: agentTitle(i18n, type),
+        subtitle: input.assignTask,
+      }
+    }
+    case "delegate":
+      return {
+        icon: "task",
+        title: agentTitle(i18n, "Delegate"),
+        subtitle: input.prompt,
+      }
     case "bash":
       return {
         icon: "console",

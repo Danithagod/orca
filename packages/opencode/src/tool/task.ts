@@ -10,6 +10,20 @@ import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
 import { Config } from "../config/config"
 import { PermissionNext } from "@/permission/next"
+import { compactSubagentText, formatSubagentOutput } from "./subagent-output"
+
+const alias: Record<string, string> = {
+  architect: "explore",
+  builder: "code",
+  tester: "code",
+  reviewer: "code",
+  "memory-keeper": "code",
+  coordinator: "general",
+}
+
+export function resolveSubagentType(type: string) {
+  return alias[type] ?? type
+}
 
 const parameters = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
@@ -44,21 +58,23 @@ export const TaskTool = Tool.define("task", async (ctx) => {
     parameters,
     async execute(params: z.infer<typeof parameters>, ctx) {
       const config = await Config.get()
+      const subagentType = resolveSubagentType(params.subagent_type)
 
       // Skip permission check when user explicitly invoked via @ or command subtask
       if (!ctx.extra?.bypassAgentCheck) {
         await ctx.ask({
           permission: "task",
-          patterns: [params.subagent_type],
+          patterns: [subagentType],
           always: ["*"],
           metadata: {
             description: params.description,
-            subagent_type: params.subagent_type,
+            requested_subagent_type: params.subagent_type,
+            subagent_type: subagentType,
           },
         })
       }
 
-      const agent = await Agent.get(params.subagent_type)
+      const agent = await Agent.get(subagentType)
       if (!agent) throw new Error(`Unknown agent type: ${params.subagent_type} is not a valid agent type`)
 
       const hasTaskPermission = agent.permission.some((rule) => rule.permission === "task")
@@ -73,16 +89,6 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           parentID: ctx.sessionID,
           title: params.description + ` (@${agent.name} subagent)`,
           permission: [
-            {
-              permission: "todowrite",
-              pattern: "*",
-              action: "deny",
-            },
-            {
-              permission: "todoread",
-              pattern: "*",
-              action: "deny",
-            },
             ...(hasTaskPermission
               ? []
               : [
@@ -123,19 +129,24 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       }
       ctx.abort.addEventListener("abort", cancel)
       using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
-      const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
+      const promptParts = (await SessionPrompt.resolvePromptParts(params.prompt)).map((part) => {
+        if (part.type !== "text") return part
+        return {
+          ...part,
+          synthetic: true,
+        }
+      })
 
       const result = await SessionPrompt.prompt({
         messageID,
         sessionID: session.id,
+        internal: true,
         model: {
           modelID: model.modelID,
           providerID: model.providerID,
         },
         agent: agent.name,
         tools: {
-          todowrite: false,
-          todoread: false,
           ...(hasTaskPermission ? {} : { task: false }),
           ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
         },
@@ -143,20 +154,21 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       })
 
       const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
-
-      const output = [
-        `task_id: ${session.id} (for resuming to continue this task if needed)`,
-        "",
-        "<task_result>",
-        text,
-        "</task_result>",
-      ].join("\n")
+      const summary = compactSubagentText(text)
+      const output = formatSubagentOutput({
+        taskId: session.id,
+        sessionId: session.id,
+        agent: agent.name,
+        summary,
+      })
 
       return {
         title: params.description,
         metadata: {
           sessionId: session.id,
           model,
+          summary,
+          truncated: false,
         },
         output,
       }

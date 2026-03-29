@@ -3,7 +3,7 @@
  * Custom replacement for the upstream SessionTurn, designed for the VS Code sidebar.
  *
  * Key differences from upstream SessionTurn:
- * - No "Gathered context" grouping — each tool call is rendered individually
+ * - Compact gathered-context grouping tuned for the VS Code sidebar
  * - Sub-agents are fully expanded inline via TaskToolExpanded
  * - No per-turn auto-scroll (MessageList handles it)
  * - Simpler flat structure without overflow containers
@@ -165,7 +165,7 @@ export const VscodeSessionTurn: Component<VscodeSessionTurnProps> = (props) => {
             />
           </div>
 
-          {/* Assistant parts — flat list, no context grouping */}
+          {/* Assistant parts — compact context grouping for read/glob/grep/list */}
           <Show when={assistantMessages().length > 0}>
             <div class="vscode-session-turn-assistant">
               <For each={assistantMessages()}>

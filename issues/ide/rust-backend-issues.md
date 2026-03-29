@@ -1,0 +1,63 @@
+# Tauri Desktop App — Rust Backend Issues
+
+> Package: `packages/desktop/src-tauri/`
+> Generated: 2026-03-28
+> Verified: 2026-03-28
+> Scope: Core app logic, CLI management, server connection, window management, OS-specific code
+
+---
+
+## Critical
+
+| #   | Issue                                    | File         | Line(s) | Details                                                                                                                                                                                                                           |
+| --- | ---------------------------------------- | ------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Command injection in `wsl_path`**      | `src/lib.rs` | 281-315 | Path argument interpolated into shell string `format!("wslpath {flag} \"$HOME{escaped}\"")`. `$()`, backticks, dollar signs are evaluated by shell. **Fix:** Pass path as discrete argument to `wslpath` instead of via `sh -lc`. |
+| 2   | **TOCTOU race with fixed temp file**     | `src/cli.rs` | 179-194 | Install script written to predictable `/tmp/opencode-install.sh`. Another process could replace it between write and execute. **Fix:** Use `tempfile::NamedTempFile` or unique filename.                                          |
+| 3   | **Command injection risk in WSL script** | `src/cli.rs` | 439-468 | `args` (raw `&str`) interpolated directly into shell script string. `shell_escape()` helper exists but is not applied to `args`. Safe today but fragile. **Fix:** Shell-escape each argument individually.                        |
+
+## High
+
+| #   | Issue                                                 | File                | Line(s)       | Details                                                                                                                                                                                                                                                                                               |
+| --- | ----------------------------------------------------- | ------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4   | **`Mutex::lock().unwrap()` can panic on poison**      | `src/lib.rs`        | 86-87, 101    | If thread panics while holding mutex, all subsequent `unwrap()` calls panic. This is in `kill_sidecar` — a panic crashes the app. **Fix:** Use `.unwrap_or_else(\|e\| e.into_inner())` or `tokio::sync::Mutex`.                                                                                       |
+| 5   | **`expect()` panics in async `initialize()`**         | `src/lib.rs`        | 570, 575, 591 | `LoadingWindow::create(&app).expect(...)` and `MainWindow::create(&app).expect(...)` in spawned async task. If window creation fails (e.g., display server issues), app is left in broken state with no server and no UI. **Fix:** Propagate errors through `server_ready_tx` and handle in frontend. |
+| 6   | **`.take().unwrap()` on stdout/stderr**               | `src/cli.rs`        | 526-532       | `child.stdout().take().unwrap()` and `child.stderr().take().unwrap()` can panic if streams were already consumed. Note: `Stdio::piped()` is set at lines 502-503 before spawn, making this extremely unlikely. **Fix:** Use `match` or `if let` for graceful handling.                                |
+| 7   | **Busy-wait loop blocks Tokio worker**                | `src/cli.rs`        | 295-315       | `command_output_with_timeout` uses `std::thread::sleep(Duration::from_millis(25))` in a loop. Blocks Tokio worker thread, reducing throughput and potentially causing deadlocks. **Fix:** Use `tokio::time::timeout()` or wrap in `tokio::task::spawn_blocking()`.                                    |
+| 8   | **`blocking_show_with_result` in async context**      | `src/server.rs`     | 240           | `check_health_or_ask_retry` is `async` but calls `blocking_show_with_result()` which blocks the current thread. In Tokio runtime, this starves workers. **Fix:** Use async dialog API or `spawn_blocking()`.                                                                                          |
+| 9   | **`.expect("Failed to spawn opencode")` crashes app** | `src/cli.rs`        | 610           | Called during initialization in `pub fn serve()` — panic crashes app with no graceful error handling or user feedback. Note: incorrectly attributed to `src/server.rs` in initial review; `server.rs` only has 253 lines. **Fix:** Return `Result` and propagate error.                               |
+| 10  | **TOCTOU race in Windows registry read**              | `src/os/windows.rs` | 160-198       | Registry value size queried first (lines 165-175), then data read (lines 186-196). Type IS re-checked at line 192 between calls. The API handles size changes gracefully (ERROR_MORE_DATA). Practical risk is minimal. **Fix:** Document assumption.                                                  |
+
+## Medium
+
+| #   | Issue                                                        | File                | Line(s)      | Details                                                                                                                                                                                                                                                                                                       |
+| --- | ------------------------------------------------------------ | ------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 11  | **UUID v4 unclear crypto intent for password**               | `src/lib.rs`        | 652          | Used as HTTP Basic Auth for local sidecar. Note: `uuid::Uuid::new_v4()` delegates to `getrandom` internally, which IS a CSPRNG — the actual randomness is fine. The concern is about intent clarity: using a dedicated crypto API makes the purpose explicit. **Fix:** Use `getrandom::getrandom()` directly. |
+| 12  | **Unnecessary listener registration when no loading window** | `src/lib.rs`        | 446, 586     | `event_once_fut` listener created unconditionally at line 446 but event only emitted by loading window. When `loading_window` is `None`, the listener is unnecessary (the `oneshot::Receiver` is dropped cleanly, not leaked). **Fix:** Create listener only when `loading_window.is_some()`.                 |
+| 13  | **Port 0 race condition**                                    | `src/lib.rs`        | 667-678      | `TcpListener` bound to port 0, then dropped. Another process could bind the port before sidecar. **Fix:** Keep listener alive until sidecar has bound.                                                                                                                                                        |
+| 14  | **`XDG_DATA_HOME` path on all platforms**                    | `src/lib.rs`        | 689-701      | `opencode_db_path` uses `XDG_DATA_HOME` with fallback `dirs::home_dir() + ".local/share"` — incorrect on Windows. Should use `%APPDATA%` or `%LOCALAPPDATA%`. **Fix:** Use `dirs::data_dir()`.                                                                                                                |
+| 15  | **`RwLock` guard is dead code**                              | `src/cli.rs`        | 519, 698-704 | `RwLock` created for pipe reader but no writer is ever acquired. Abort handler doesn't wait for lock. **Fix:** Implement write guard in abort logic or remove lock.                                                                                                                                           |
+| 16  | **New `reqwest::Client` per health check in hot loop**       | `src/server.rs`     | 153-163      | `check_health()` creates new client every call. In `spawn_local_server`, this happens in a 100ms polling loop. Client creation involves DNS config, TLS setup, connection pool. **Fix:** Create once and pass into health check.                                                                              |
+| 17  | **`MainWindow::create()` called twice**                      | `src/lib.rs`        | 575, 591     | In `initialize()`, if `loading_window` is `None`, create called at line 575; if `Some`, again at line 591. Note: this is in `lib.rs`, not `windows.rs`. `create()` handles "already exists" by returning existing window, but this is confusing. **Fix:** Restructure so `create()` called exactly once.      |
+| 18  | **420-line `resolve_windows_app_path` function**             | `src/os/windows.rs` | 22-442       | Contains multiple nested closures with complex branching. Extremely hard to test in isolation. **Fix:** Extract closures into named functions; add unit tests. Consider strategy pattern for resolution order.                                                                                                |
+| 19  | **`check_linux_app` always returns `true`**                  | `src/lib.rs`        | 275-277      | Stub function makes command always return true on Linux regardless of whether app exists. **Fix:** Implement actual detection or return explicit unsupported error.                                                                                                                                           |
+
+## Low
+
+| #      | Issue                                                 | File                | Line(s) | Details                                                                                                                                                                                                                |
+| ------ | ----------------------------------------------------- | ------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 20     | **Window state save lost on fast exit**               | `src/windows.rs`    | 86-116  | Debounce uses `tokio::time::sleep(200ms)`. If app exits during sleep, final state save is lost. `while rx.recv().await.is_some()` exits without final save. **Fix:** Add `Drop` implementation or explicit final save. |
+| 21     | **`unsafe { std::env::set_var }` — fragile**          | `src/main.rs`       | 14, 64  | Correctly documented as safe (pre-threads), but refactoring could break this. **Fix:** Consolidate all env mutations into single function at start of `main()`.                                                        |
+| 22     | **`get_cli_install_path()` uses `HOME` on all Unix**  | `src/cli.rs`        | 105     | `std::env::var("HOME")` may not be set in some configs (e.g., `sudo -u user`). **Fix:** Use `dirs::home_dir()` as fallback.                                                                                            |
+| ~~23~~ | ~~**`check_macos_app` compiled on all platforms**~~   | ~~`src/cli.rs`~~    | ~~230~~ | ~~REFUTED:~~ Function is gated with `#[cfg(target_os = "macos")]` at line 211 — not compiled on non-macOS platforms.                                                                                                   |
+| 24     | **Custom `%VAR%` expansion reimplements Windows API** | `src/os/windows.rs` | 23-56   | `ExpandEnvironmentStringsW` would be more reliable and handle nested/repeated expansions correctly.                                                                                                                    |
+| 25     | **Tab character in source indentation**               | `src/server.rs`     | 237     | Cosmetic — tab mixed with spaces in method chain alignment (not embedded in string literal).                                                                                                                           |
+
+## Summary
+
+| Severity  | Count  |
+| --------- | ------ |
+| Critical  | 3      |
+| High      | 7      |
+| Medium    | 9      |
+| Low       | 6      |
+| **Total** | **24** |

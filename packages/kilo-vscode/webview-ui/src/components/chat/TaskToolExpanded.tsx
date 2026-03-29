@@ -1,10 +1,6 @@
 /**
- * TaskToolExpanded component
- * Registers a custom "task" tool renderer that matches the v1.0.25 layout:
- * a BasicTool open by default with a compact scrollable list of child tool calls,
- * each shown as: icon + title + subtitle.
- *
- * Call registerExpandedTaskTool() once at app startup to activate.
+ * Registers compact expanded renderers for sub-agent tools (`task`,
+ * `agent_spawn`, `delegate`) so child-session activity is visible inline.
  */
 
 import { Component, createEffect, createMemo, For, Show } from "solid-js"
@@ -36,6 +32,26 @@ function getSessionToolParts(store: ReturnType<typeof useData>["store"], session
   return parts
 }
 
+function getSessionAssistantMessages(store: ReturnType<typeof useData>["store"], sessionId: string): SDKMessage[] {
+  const messages = store.message?.[sessionId] as SDKMessage[] | undefined
+  if (!messages) return []
+  return messages.filter((m) => m.role === "assistant")
+}
+
+function countTokens(msg: SDKMessage) {
+  if (msg.role !== "assistant" || !msg.tokens) return 0
+  return (
+    msg.tokens.total ??
+    msg.tokens.input + msg.tokens.output + (msg.tokens.reasoning ?? 0) + (msg.tokens.cache?.read ?? 0) + (msg.tokens.cache?.write ?? 0)
+  )
+}
+
+function formatTokens(count: number) {
+  if (count >= 10000) return `${Math.round(count / 1000)}k tok`
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}k tok`
+  return `${count} tok`
+}
+
 const TaskToolRenderer: Component<ToolProps> = (props) => {
   const data = useData()
   const i18n = useI18n()
@@ -57,10 +73,24 @@ const TaskToolRenderer: Component<ToolProps> = (props) => {
     session.syncSession(id)
   })
 
-  const title = createMemo(() => i18n.t("ui.tool.agent", { type: props.input.subagent_type || props.tool }))
+  const title = createMemo(() => {
+    const input = props.input as Record<string, unknown>
+    const metadata = props.metadata as Record<string, unknown>
+    const type =
+      typeof input.subagent_type === "string"
+        ? input.subagent_type
+        : typeof input.type === "string"
+          ? input.type
+          : typeof metadata.subagentType === "string"
+            ? metadata.subagentType
+            : props.tool
+    return i18n.t("ui.tool.agent", { type })
+  })
 
   const description = createMemo(() => {
-    const val = props.input.description
+    const input = props.input as Record<string, unknown>
+    const metadata = props.metadata as Record<string, unknown>
+    const val = metadata.title ?? input.description ?? input.assignTask ?? input.prompt
     return typeof val === "string" ? val : undefined
   })
 
@@ -69,6 +99,20 @@ const TaskToolRenderer: Component<ToolProps> = (props) => {
     const id = childSessionId()
     if (!id) return []
     return getSessionToolParts(data.store, id)
+  })
+
+  const childTodos = createMemo(() => session.sessionTodos(childSessionId()))
+  const childTokens = createMemo(() => {
+    const id = childSessionId()
+    if (!id) return 0
+    return getSessionAssistantMessages(data.store, id).reduce((sum, msg) => sum + countTokens(msg), 0)
+  })
+  const summary = createMemo(() => {
+    const items: string[] = []
+    if (childToolParts().length > 0) items.push(`${childToolParts().length} tools`)
+    if (childTodos().length > 0) items.push(`${childTodos().length} todos`)
+    if (childTokens() > 0) items.push(formatTokens(childTokens()))
+    return items.join(" · ")
   })
 
   const autoScroll = createAutoScroll({
@@ -89,11 +133,11 @@ const TaskToolRenderer: Component<ToolProps> = (props) => {
         <span data-slot="basic-tool-tool-title" class="capitalize">
           {title()}
         </span>
-        <Show when={description() || childToolParts().length > 0}>
+        <Show when={description() || summary()}>
           <span data-slot="basic-tool-tool-subtitle">
             {description()}
-            <Show when={childToolParts().length > 0}>
-              {description() ? " " : ""}({childToolParts().length})
+            <Show when={summary()}>
+              {description() ? " " : ""}({summary()})
             </Show>
           </span>
         </Show>
@@ -145,12 +189,14 @@ const TaskToolRenderer: Component<ToolProps> = (props) => {
 }
 
 /**
- * Override the upstream "task" tool registration with the v1.0.25-style renderer.
+ * Override the upstream sub-agent tool registrations with the compact child-session renderer.
  * Must be called once at app startup.
  */
 export function registerExpandedTaskTool() {
-  ToolRegistry.register({
-    name: "task",
-    render: TaskToolRenderer,
-  })
+  for (const name of ["task", "agent_spawn", "delegate"]) {
+    ToolRegistry.register({
+      name,
+      render: TaskToolRenderer,
+    })
+  }
 }

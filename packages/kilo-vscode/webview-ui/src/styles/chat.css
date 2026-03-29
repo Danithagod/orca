@@ -4,6 +4,38 @@
  */
 
 /* ============================================
+   Task Header
+   ============================================ */
+
+[data-component="task-header"] {
+  [data-slot="task-header-back"] {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    cursor: pointer;
+    color: var(--text-weak);
+    background: color-mix(in srgb, var(--surface-raised-base) 88%, transparent);
+
+    &:hover {
+      color: var(--text-strong);
+      background: color-mix(in srgb, var(--surface-raised-stronger-base) 92%, transparent);
+    }
+  }
+
+  [data-slot="task-header-back-shortcut"] {
+    font-size: 11px;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 999px;
+    color: var(--text-muted, var(--vscode-descriptionForeground));
+    background: color-mix(in srgb, var(--surface-raised-stronger-base) 94%, transparent);
+  }
+}
+
+/* ============================================
    Task Header Todos
    ============================================ */
 
@@ -1797,14 +1829,14 @@
 .vscode-session-turn {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   min-width: 0;
   padding: 0 4px;
 }
 
 .vscode-session-turn + .vscode-session-turn {
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
 .vscode-session-turn-user {
@@ -1814,8 +1846,20 @@
 .vscode-session-turn-assistant {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
+}
+
+.vscode-session-turn-assistant [data-component="context-tool-group-trigger"] {
+  min-height: 20px;
+}
+
+.vscode-session-turn-assistant [data-component="context-tool-group-list"] {
+  padding: 4px 0 2px;
+}
+
+.vscode-session-turn-assistant [data-slot="context-tool-group-item"] {
+  padding: 4px 0;
 }
 
 .vscode-session-turn-diffs {

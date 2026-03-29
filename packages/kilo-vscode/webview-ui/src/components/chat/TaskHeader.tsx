@@ -6,12 +6,13 @@
  */
 
 import { Component, For, Show, createMemo, createSignal } from "solid-js"
-import { IconButton } from "@kilocode/kilo-ui/icon-button"
-import { Tooltip } from "@kilocode/kilo-ui/tooltip"
 import { Icon } from "@kilocode/kilo-ui/icon"
 import { Checkbox } from "@kilocode/kilo-ui/checkbox"
+import { IconButton } from "@kilocode/kilo-ui/icon-button"
+import { Tooltip } from "@kilocode/kilo-ui/tooltip"
 import { useSession } from "../../context/session"
 import { useLanguage } from "../../context/language"
+import { useVSCode } from "../../context/vscode"
 import type { TodoItem } from "../../types/messages"
 
 interface TaskHeaderProps {
@@ -21,6 +22,7 @@ interface TaskHeaderProps {
 export const TaskHeader: Component<TaskHeaderProps> = (props) => {
   const session = useSession()
   const language = useLanguage()
+  const vscode = useVSCode()
 
   const title = createMemo(() => session.currentSession()?.title ?? language.t("command.session.new"))
   const hasMessages = createMemo(() => session.messages().length > 0)
@@ -59,6 +61,7 @@ export const TaskHeader: Component<TaskHeaderProps> = (props) => {
   })
 
   const [todosOpen, setTodosOpen] = createSignal(false)
+  const closePanel = () => vscode.postMessage({ type: "closePanel" })
 
   return (
     <Show when={hasMessages()}>
@@ -67,6 +70,13 @@ export const TaskHeader: Component<TaskHeaderProps> = (props) => {
           {title()}
         </div>
         <div data-slot="task-header-stats">
+          <Show when={props.readonly}>
+            <button data-slot="task-header-back" onClick={closePanel} aria-label="Back to chat">
+              <Icon name="arrow-left" size="small" />
+              <span>Back to Chat</span>
+              <span data-slot="task-header-back-shortcut">Esc</span>
+            </button>
+          </Show>
           <Show when={cost()}>
             {(c) => (
               <Tooltip value={language.t("context.usage.sessionCost")} placement="bottom">

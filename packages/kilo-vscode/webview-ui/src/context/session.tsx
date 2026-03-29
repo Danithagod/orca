@@ -100,6 +100,7 @@ interface SessionContextValue {
 
   // Todos for current session
   todos: Accessor<TodoItem[]>
+  sessionTodos: (sessionID: string | undefined) => TodoItem[]
 
   // Pending permission requests (unscoped — all tracked sessions)
   permissions: Accessor<PermissionRequest[]>
@@ -1430,7 +1431,9 @@ export const SessionProvider: ParentComponent = (props) => {
 
   const allStatusMap = () => statusMap as Record<string, SessionStatusInfo>
 
-  const userMessages = createMemo(() => messages().filter((m) => m.role === "user"))
+  const userMessages = createMemo(() =>
+    messages().filter((m) => m.role === "user" && !(m as { internal?: boolean }).internal),
+  )
 
   const revert = createMemo(() => {
     const id = currentSessionID()
@@ -1480,6 +1483,11 @@ export const SessionProvider: ParentComponent = (props) => {
   const todos = () => {
     const id = currentSessionID()
     return id ? store.todos[id] || [] : []
+  }
+
+  const sessionTodos = (sessionID: string | undefined) => {
+    if (!sessionID) return []
+    return store.todos[sessionID] || []
   }
 
   const sessions = createMemo(() =>
@@ -1533,6 +1541,7 @@ export const SessionProvider: ParentComponent = (props) => {
     userMessages,
     getParts,
     todos,
+    sessionTodos,
     permissions,
     respondingPermissions,
     questions,

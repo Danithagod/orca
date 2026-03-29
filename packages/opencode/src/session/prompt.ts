@@ -106,6 +106,7 @@ export namespace SessionPrompt {
   export const PromptInput = z.object({
     sessionID: Identifier.schema("session"),
     messageID: Identifier.schema("message").optional(),
+    internal: z.boolean().optional(),
     model: z
       .object({
         providerID: z.string(),
@@ -1060,6 +1061,7 @@ export namespace SessionPrompt {
       time: {
         created: Date.now(),
       },
+      internal: input.internal,
       tools: input.tools,
       agent: agent.name,
       model,

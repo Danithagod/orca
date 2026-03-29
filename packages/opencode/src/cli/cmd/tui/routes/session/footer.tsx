@@ -1,24 +1,41 @@
 import { createMemo, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { createStore } from "solid-js/store"
+import { TextAttributes } from "@opentui/core"
+
 import { useTheme } from "../../context/theme"
 import { useSync } from "../../context/sync"
 import { useDirectory } from "../../context/directory"
 import { useConnected } from "../../component/dialog-model"
-import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
 
-export function Footer() {
+function Keycap(props: { label: string }) {
+  const { theme } = useTheme()
+  return (
+    <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+      <text fg={theme.primary} attributes={TextAttributes.BOLD} wrapMode="none">
+        {props.label}
+      </text>
+    </box>
+  )
+}
+
+export function Footer(props: { child?: boolean }) {
   const { theme } = useTheme()
   const sync = useSync()
   const route = useRoute()
   const mcp = createMemo(() => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length)
-  const mcpError = createMemo(() => Object.values(sync.data.mcp).some((x) => x.status === "failed"))
-  const lsp = createMemo(() => Object.keys(sync.data.lsp))
+  const lsp = createMemo(() => Object.keys(sync.data.lsp).length)
   const permissions = createMemo(() => {
     if (route.data.type !== "session") return []
     return sync.data.permission[route.data.sessionID] ?? []
   })
   const directory = useDirectory()
   const connected = useConnected()
+  const dir = createMemo(() => {
+    const value = directory()
+    if (value.length <= 72) return value
+    return "..." + value.slice(-69)
+  })
 
   const [store, setStore] = createStore({
     welcome: false,
@@ -35,13 +52,11 @@ export function Footer() {
         return
       }
 
-      if (store.welcome) {
-        setStore("welcome", false)
-        timeouts.push(setTimeout(() => tick(), 10_000))
-        return
-      }
+      setStore("welcome", false)
+      timeouts.push(setTimeout(() => tick(), 10000))
     }
-    timeouts.push(setTimeout(() => tick(), 10_000))
+
+    timeouts.push(setTimeout(() => tick(), 10000))
 
     onCleanup(() => {
       timeouts.forEach(clearTimeout)
@@ -52,47 +67,55 @@ export function Footer() {
     <box
       flexDirection="row"
       justifyContent="space-between"
-      gap={1}
+      alignItems="center"
+      gap={2}
       flexShrink={0}
-      backgroundColor={theme.primary}
+      backgroundColor={theme.backgroundPanel}
+      width="100%"
       paddingLeft={1}
       paddingRight={1}
-      width="100%"
+      border={["top"]}
+      borderColor={theme.border}
     >
-      <box flexDirection="row" gap={1}>
-        <text fg={theme.background} attributes={1}>Orca</text>
-        <text fg={theme.background} attributes={2}>│</text>
-        <text fg={theme.background} attributes={2}>{directory()}</text>
+      <box flexDirection="row" gap={1} minWidth={1} flexShrink={1} alignItems="center">
+        <text fg={theme.primary} attributes={TextAttributes.BOLD}>
+          Orca
+        </text>
+        <text fg={theme.textMuted}>|</text>
+        <text fg={theme.textMuted} wrapMode="none">
+          {dir()}
+        </text>
       </box>
-      <box gap={2} flexDirection="row" flexShrink={0}>
+
+      <box gap={1} flexDirection="row" flexShrink={0} alignItems="center">
         <Switch>
           <Match when={store.welcome}>
-            <text fg={theme.background} attributes={2}>
-              Get started <span style={{ fg: theme.background, opacity: 0.7 }}>/connect</span>
+            <text fg={theme.textMuted}>
+              Connect more providers with <span style={{ fg: theme.primary }}>/connect</span>
             </text>
           </Match>
           <Match when={connected()}>
             <Show when={permissions().length > 0}>
-              <text fg={theme.background} attributes={1}>
-                △ {permissions().length} Permission{permissions().length > 1 ? "s" : ""}
+              <text fg={theme.warning} wrapMode="none">
+                {permissions().length} permission{permissions().length > 1 ? "s" : ""}
               </text>
             </Show>
-            <text fg={theme.background} attributes={1 | 2}> {/* BOLD | ITALIC */}
-              TAB <span style={{ italic: true, bold: false }}>AGENTS</span>
-            </text>
-            <text fg={theme.background} attributes={1 | 2}>
-              CTRL+P <span style={{ italic: true, bold: false }}>COMMANDS</span>
-            </text>
-            <text fg={theme.background}>
-              <span style={{ fg: theme.background }}>●</span> {lsp().length} LSP
-            </text>
-            <Show when={mcp()}>
-              <text fg={theme.background}>
-                <span style={{ fg: lsp().length > 0 ? theme.background : theme.background, opacity: 0.7 }}>◉ </span>
-                {mcp()} MCP
-              </text>
+            <Show when={props.child}>
+              <Keycap label="ESC" />
+              <text fg={theme.textMuted}>back</text>
+              <text fg={theme.textMuted}>•</text>
             </Show>
-            <text fg={theme.background} attributes={2}>/status</text>
+            <Keycap label="TAB" />
+            <text fg={theme.textMuted}>agents</text>
+            <Keycap label="CTRL+P" />
+            <text fg={theme.textMuted}>commands</text>
+            <text fg={theme.textMuted}>•</text>
+            <text fg={theme.textMuted}>{lsp()} LSP</text>
+            <Show when={mcp() > 0}>
+              <text fg={theme.textMuted}>•</text>
+              <text fg={theme.textMuted}>{mcp()} MCP</text>
+            </Show>
+            <text fg={theme.textMuted}>ORCA /status</text>
           </Match>
         </Switch>
       </box>

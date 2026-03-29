@@ -111,7 +111,7 @@ export function SessionContextTab() {
   )
 
   const userMessages = createMemo(
-    () => messages().filter((m) => m.role === "user") as UserMessage[],
+    () => messages().filter((m) => m.role === "user" && !(m as { internal?: boolean }).internal) as UserMessage[],
     emptyUserMessages,
     { equals: same },
   )
@@ -144,7 +144,10 @@ export function SessionContextTab() {
 
   const counts = createMemo(() => {
     const all = messages()
-    const user = all.reduce((count, x) => count + (x.role === "user" ? 1 : 0), 0)
+    const user = all.reduce(
+      (count, x) => count + (x.role === "user" && !(x as { internal?: boolean }).internal ? 1 : 0),
+      0,
+    )
     const assistant = all.reduce((count, x) => count + (x.role === "assistant" ? 1 : 0), 0)
     return {
       all: all.length,

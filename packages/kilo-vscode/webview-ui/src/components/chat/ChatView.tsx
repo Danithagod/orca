@@ -65,9 +65,14 @@ export const ChatView: Component<ChatViewProps> = (props) => {
   )
 
   onMount(() => {
-    if (props.readonly) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && session.status() === "busy") {
+      if (e.key !== "Escape") return
+      if (props.readonly) {
+        e.preventDefault()
+        vscode.postMessage({ type: "closePanel" })
+        return
+      }
+      if (session.status() === "busy") {
         e.preventDefault()
         session.abort()
       }

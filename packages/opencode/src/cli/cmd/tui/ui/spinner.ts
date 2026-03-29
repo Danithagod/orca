@@ -248,6 +248,7 @@ export type KnightRiderStyle = "blocks" | "diamonds" | "orca" | "sonar" | "rippl
 export interface KnightRiderOptions {
   width?: number
   style?: KnightRiderStyle
+  direction?: "forward" | "backward" | "bidirectional"
   holdStart?: number
   holdEnd?: number
   colors?: ColorInput[]
@@ -272,6 +273,7 @@ export interface KnightRiderOptions {
 export function createFrames(options: KnightRiderOptions = {}): string[] {
   const width = options.width ?? 8
   const style = options.style ?? "diamonds"
+  const direction = options.direction ?? "bidirectional"
   const holdStart = options.holdStart ?? 30
   const holdEnd = options.holdEnd ?? 9
 
@@ -296,14 +298,16 @@ export function createFrames(options: KnightRiderOptions = {}): string[] {
     colors,
     trailLength: colors.length,
     defaultColor,
-    direction: "bidirectional" as const,
+    direction,
     holdFrames: { start: holdStart, end: holdEnd },
     enableFading: options.enableFading,
     minAlpha: options.minAlpha,
   }
 
-  // Bidirectional cycle: Forward (width) + Hold End + Backward (width-1) + Hold Start
-  const totalFrames = width + holdEnd + (width - 1) + holdStart
+  const totalFrames =
+    direction === "bidirectional"
+      ? width + holdEnd + (width - 1) + holdStart
+      : width
 
   // Generate dynamic frames where inactive pixels are dots and active ones are blocks
   const frames = Array.from({ length: totalFrames }, (_, frameIndex) => {
@@ -381,6 +385,7 @@ export function createFrames(options: KnightRiderOptions = {}): string[] {
  * @returns ColorGenerator function
  */
 export function createColors(options: KnightRiderOptions = {}): ColorGenerator {
+  const direction = options.direction ?? "bidirectional"
   const holdStart = options.holdStart ?? 30
   const holdEnd = options.holdEnd ?? 9
 
@@ -405,7 +410,7 @@ export function createColors(options: KnightRiderOptions = {}): ColorGenerator {
     colors,
     trailLength: colors.length,
     defaultColor,
-    direction: "bidirectional" as const,
+    direction,
     holdFrames: { start: holdStart, end: holdEnd },
     enableFading: options.enableFading,
     minAlpha: options.minAlpha,

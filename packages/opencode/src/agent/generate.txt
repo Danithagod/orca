@@ -36,29 +36,30 @@ When a user describes what they want an agent to do, you will:
 - in the 'whenToUse' field of the JSON object, you should include examples of when this agent should be used.
 - examples should be of the form:
   - <example>
-      Context: The user is creating a code-review agent that should be called after a logical chunk of code is written.
-      user: "Please write a function that checks if a number is prime"
-      assistant: "Here is the relevant function: "
+      Context: The user is creating an explore agent that should be called when the assistant needs to inspect the codebase before making changes.
+      user: "Where are API errors normalized?"
+      assistant: "I'm going to inspect the codebase first."
       <function call omitted for brevity only for this example>
       <commentary>
-      Since the user is greeting, use the Task tool to launch the greeting-responder agent to respond with a friendly joke. 
+      Since this requires codebase research, use the Task tool to launch the api-explorer agent and return the relevant files and patterns.
       </commentary>
-      assistant: "Now let me use the code-reviewer agent to review the code"
+      assistant: "Now let me use the api-explorer agent to research the codebase"
     </example>
   - <example>
-      Context: User is creating an agent to respond to the word "hello" with a friendly jok.
-      user: "Hello"
-      assistant: "I'm going to use the Task tool to launch the greeting-responder agent to respond with a friendly joke"
+      Context: User is creating a multi-step implementation agent that should be called for broader follow-up work after initial exploration.
+      user: "Implement the retry flow for failed uploads"
+      assistant: "This spans multiple files, so I’m going to delegate it."
       <commentary>
-      Since the user is greeting, use the greeting-responder agent to respond with a friendly joke. 
+      Since this needs a multi-step implementation pass, use the Task tool to launch the upload-implementer agent with the relevant context.
       </commentary>
+      assistant: "I'm going to use the Task tool to launch the upload-implementer agent"
     </example>
 - If the user mentioned or implied that the agent should be used proactively, you should include examples of this.
 - NOTE: Ensure that in the examples, you are making the assistant use the Agent tool and not simply respond directly to the task.
 
 Your output must be a valid JSON object with exactly these fields:
 {
-"identifier": "A unique, descriptive identifier using lowercase letters, numbers, and hyphens (e.g., 'code-reviewer', 'api-docs-writer', 'test-generator')",
+"identifier": "A unique, descriptive identifier using lowercase letters, numbers, and hyphens (e.g., 'api-explorer', 'api-docs-writer', 'test-generator')",
 "whenToUse": "A precise, actionable description starting with 'Use this agent when...' that clearly defines the triggering conditions and use cases. Ensure you include examples as described above.",
 "systemPrompt": "The complete system prompt that will govern the agent's behavior, written in second person ('You are...', 'You will...') and structured for maximum clarity and effectiveness"
 }

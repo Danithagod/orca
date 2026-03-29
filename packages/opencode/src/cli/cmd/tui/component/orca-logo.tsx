@@ -1,58 +1,29 @@
-// kilocode_change - Orca branding
-import { For } from "solid-js"
+import { TextAttributes } from "@opentui/core"
 import { useTheme } from "@tui/context/theme"
-
-// Orca ASCII Logo - blocky shadowed style matching "CLAUDE CODE"
-const ASCII_LOGO = [
-  "   ▄▄▄▄▄▄   ▄▄▄▄▄▄    ▄▄▄▄▄▄   ▄▄▄▄▄▄ ",
-  "  ██      ██    ██  ██        ██    ██",
-  "  ██      ██████    ██        ████████",
-  "  ██      ██   ██   ██        ██    ██",
-  "   ▀▀▀▀▀▀ ██    ██   ▀▀▀▀▀▀   ██    ██",
-]
 
 export function OrcaLogo() {
   const { theme } = useTheme()
-
   return (
-    <box>
-      <For each={ASCII_LOGO}>
-        {(line) => (
-          <box flexDirection="row">
-            <text fg={theme.accent} selectable={false}>
-              {line}
-            </text>
-          </box>
-        )}
-      </For>
+    <box flexDirection="column" alignItems="center" gap={0.5}>
+      <text fg={theme.primary} selectable={false} attributes={TextAttributes.BOLD}>
+        ORCA
+      </text>
+      <text fg={theme.textMuted} selectable={false}>
+        command console
+      </text>
     </box>
   )
 }
-
-// Mini version: compact yet retaining the blocky shadowed design
-const MINI_LOGO = [
-  ` ▄███▄ ████▄ ████▄  ▄███▄`,
-  ` █   █ ██▄▄▀ ██     ██▄▄█`,
-  ` ▀███▀ ██ ▀▄ ▀████  ██  █`,
-]
 
 export function OrcaMiniLogo() {
   const { theme } = useTheme()
-
   return (
-    <box flexDirection="column" alignItems="center">
-      <For each={MINI_LOGO}>
-        {(line) => (
-          <box flexDirection="row">
-            <text fg={theme.accent} selectable={false}>
-              {line}
-            </text>
-          </box>
-        )}
-      </For>
+    <box>
+      <text fg={theme.primary} selectable={false} attributes={TextAttributes.BOLD}>
+        ORCA
+      </text>
     </box>
   )
 }
 
-// Backwards compatibility alias
 export { OrcaLogo as KiloLogo }

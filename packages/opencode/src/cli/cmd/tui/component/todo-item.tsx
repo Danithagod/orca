@@ -1,4 +1,5 @@
 import { useTheme } from "../context/theme"
+import { TodoStatus } from "./todo-status"
 
 export interface TodoItemProps {
   status: string
@@ -7,24 +8,17 @@ export interface TodoItemProps {
 
 export function TodoItem(props: TodoItemProps) {
   const { theme } = useTheme()
+  const fg = () => {
+    if (props.status === "completed") return theme.success
+    if (props.status === "in_progress") return theme.warning
+    if (props.status === "paused") return theme.warning
+    return theme.textMuted
+  }
 
   return (
-    <box flexDirection="row" gap={0}>
-      <text
-        flexShrink={0}
-        style={{
-          fg: props.status === "in_progress" ? theme.warning : theme.textMuted,
-        }}
-      >
-        [{props.status === "completed" ? "✓" : props.status === "in_progress" ? "•" : " "}]{" "}
-      </text>
-      <text
-        flexGrow={1}
-        wrapMode="word"
-        style={{
-          fg: props.status === "in_progress" ? theme.warning : theme.textMuted,
-        }}
-      >
+    <box flexDirection="row" gap={1}>
+      <TodoStatus status={props.status} compact />
+      <text flexGrow={1} wrapMode="word" style={{ fg: fg() }}>
         {props.content}
       </text>
     </box>

@@ -1,25 +1,24 @@
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { createMemo, Match, onMount, Show, Switch } from "solid-js"
+import { TextAttributes } from "@opentui/core"
+import path from "path"
+
 import { useTheme } from "@tui/context/theme"
-import { useKeybind } from "@tui/context/keybind"
-import { TextAttributes, RGBA } from "@opentui/core"
-import { Logo } from "../component/logo"
-import { Tips } from "../component/tips"
-import { Locale } from "@/util/locale"
 import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
 import { useDirectory } from "../context/directory"
 import { useRouteData } from "@tui/context/route"
 import { usePromptRef } from "../context/prompt"
-import { Installation } from "@/installation"
 import { useKV } from "../context/kv"
 import { useCommandDialog } from "../component/dialog-command"
-import { KiloNews } from "@/kilocode/components/kilo-news" // kilocode_change
-import { useConnected } from "../component/dialog-model" // kilocode_change
-import { OrcaCard, OrcaPanel, OrcaStatusBadge } from "../component/orca-ui" // kilocode_change
+import { useConnected } from "../component/dialog-model"
+import { KiloNews } from "@/kilocode/components/kilo-news"
+import { Tips } from "../component/tips"
+import { Logo } from "../component/logo"
+import { OrcaMiniLogo } from "../component/orca-logo"
+import { OrcaDots, OrcaPanel, OrcaStatusBadge } from "../component/orca-ui"
 
-// TODO: what is the best way to do this?
 let once = false
 
 export function Home() {
@@ -29,26 +28,24 @@ export function Home() {
   const route = useRouteData("home")
   const promptRef = usePromptRef()
   const command = useCommandDialog()
-  const mcp = createMemo(() => Object.keys(sync.data.mcp).length > 0)
-  const mcpError = createMemo(() => {
-    return Object.values(sync.data.mcp).some((x) => x.status === "failed")
-  })
+  const args = useArgs()
+  const directory = useDirectory()
+  const connected = useConnected()
 
-  const connectedMcpCount = createMemo(() => {
-    return Object.values(sync.data.mcp).filter((x) => x.status === "connected").length
-  })
-
+  const connectedMcpCount = createMemo(
+    () => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length,
+  )
+  const mcpError = createMemo(() => Object.values(sync.data.mcp).some((x) => x.status === "failed"))
   const isFirstTimeUser = createMemo(() => sync.data.session.length === 0)
   const tipsHidden = createMemo(() => kv.get("tips_hidden", false))
-  const newsHidden = createMemo(() => kv.get("news_hidden", false)) // kilocode_change
-  // kilocode_change start
-  const connected = useConnected()
+  const newsHidden = createMemo(() => kv.get("news_hidden", false))
   const onboarding = createMemo(() => isFirstTimeUser() && !connected())
-  // kilocode_change end
-  const showTips = createMemo(() => {
-    if (onboarding()) return !tipsHidden() // kilocode_change - show onboarding tip
-    // kilocode_change - don't hide tips for connected first-time users
-    return !tipsHidden()
+
+  const showTips = createMemo(() => !tipsHidden())
+  const stamp = createMemo(() => new Date().toISOString().replace(/\.\d+Z$/, "Z"))
+  const dir = createMemo(() => {
+    const parts = directory().split(path.sep).filter(Boolean)
+    return parts.slice(-2).join(path.sep)
   })
 
   command.register(() => [
@@ -62,7 +59,6 @@ export function Home() {
         dialog.clear()
       },
     },
-    // kilocode_change start
     {
       title: newsHidden() ? "Show news" : "Hide news",
       value: "news.toggle",
@@ -73,99 +69,134 @@ export function Home() {
         dialog.clear()
       },
     },
-    // kilocode_change end
   ])
 
-  const Hint = (
-    <Show when={connectedMcpCount() > 0}>
-      <box flexShrink={0} flexDirection="row" gap={1}>
-        <text fg={theme.text}>
-          <Switch>
-            <Match when={mcpError()}>
-              <span style={{ fg: theme.error }}>•</span> mcp errors{" "}
-              <span style={{ fg: theme.textMuted }}>ctrl+x s</span>
-            </Match>
-            <Match when={true}>
-              <span style={{ fg: theme.success }}>•</span>{" "}
-              {Locale.pluralize(connectedMcpCount(), "{} mcp server", "{} mcp servers")}
-            </Match>
-          </Switch>
-        </text>
-      </box>
-    </Show>
-  )
-
   let prompt: PromptRef
-  const args = useArgs()
   onMount(() => {
     if (once) return
     if (route.initialPrompt) {
       prompt.set(route.initialPrompt)
       once = true
-    } else if (args.prompt) {
+      return
+    }
+    if (args.prompt) {
       prompt.set({ input: args.prompt, parts: [] })
       once = true
       prompt.submit()
     }
   })
-  const directory = useDirectory()
 
-  const keybind = useKeybind()
   return (
     <>
-      <box flexGrow={1} alignItems="center" paddingLeft={4} paddingRight={4} justifyContent="center">
-        <box width="100%" maxWidth={120}>
-          <OrcaPanel title="ORCA" metadata="MOD-01 // CODENAME: ORCA" padding={2}>
-            <box alignItems="center" width="100%">
-              <box marginBottom={2}>
-                <Logo />
+      <box flexGrow={1} flexDirection="row" paddingTop={1} paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
+        <box flexGrow={1} minWidth={1}>
+          <OrcaPanel variant="frame" bgColor="background" padding={1} footer={`Orca | ${directory()}`}>
+            <box flexDirection="column" flexGrow={1} gap={1}>
+              <box flexDirection="row" justifyContent="space-between" alignItems="center">
+                <box flexDirection="row" gap={1}>
+                  <text fg={theme.primary} attributes={TextAttributes.BOLD}>
+                    ORCA CONSOLE
+                  </text>
+                  <text fg={theme.textMuted}>-</text>
+                  <text fg={theme.textMuted}>{stamp()}</text>
+                </box>
+                <text fg={theme.text} attributes={TextAttributes.BOLD}>
+                  ORCA
+                </text>
               </box>
+              <OrcaDots />
 
-              <box width="100%" maxWidth={110} zIndex={1000} marginBottom={2}>
-                <Prompt
-                  ref={(r) => {
-                    prompt = r
-                    promptRef.set(r)
-                  }}
-                  hint={Hint}
-                />
-              </box>
+              <box flexGrow={1} flexDirection="column" alignItems="center" gap={1} paddingTop={1}>
+                <box marginBottom={0.5}>
+                  <Logo />
+                </box>
+                <box width="100%" maxWidth={104}>
+                  <Prompt
+                    ref={(r) => {
+                      prompt = r
+                      promptRef.set(r)
+                    }}
+                  />
+                </box>
 
-              <box width="100%" maxWidth={110} flexDirection="row" gap={2}>
-                <Show when={!newsHidden()}>
-                  <box flexGrow={1} flexBasis={0}>
-                    <KiloNews />
-                  </box>
-                </Show>
-                <Show when={showTips()}>
-                  <box flexGrow={1} flexBasis={0}>
-                    <Tips
-                      tip={
-                        onboarding()
-                          ? "Using a free model \u2014 run {highlight}/connect{/highlight} to add your API key"
-                          : undefined
-                      }
-                    />
-                  </box>
-                </Show>
+                <box width="100%" maxWidth={104} flexDirection="row" gap={1} alignItems="flex-start" marginTop={0.5}>
+                  <Show when={!newsHidden()}>
+                    <box flexGrow={1} flexBasis={0}>
+                      <OrcaPanel title="NEWS" bgColor="element" variant="card" padding={1}>
+                        <KiloNews />
+                      </OrcaPanel>
+                    </box>
+                  </Show>
+                  <Show when={showTips()}>
+                    <box flexGrow={1} flexBasis={0}>
+                      <OrcaPanel title="GUIDE" bgColor="element" variant="card" padding={1}>
+                        <Tips
+                          tip={
+                            onboarding()
+                              ? "Using a free model - run {highlight}/connect{/highlight} to add your API key"
+                              : undefined
+                          }
+                        />
+                      </OrcaPanel>
+                    </box>
+                  </Show>
+                </box>
               </box>
             </box>
           </OrcaPanel>
         </box>
-        <Toast />
-      </box>
 
-      <box paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0} gap={2}>
-        <Show when={mcp()}>
-          <OrcaStatusBadge
-            status={mcpError() ? "error" : connectedMcpCount() > 0 ? "success" : "idle"}
-            label={`${connectedMcpCount()} MCP`}
-          />
-        </Show>
-        <box flexGrow={1} />
-        <box flexShrink={0}>
-          <text fg={theme.textMuted}>{directory()}</text>
+        <box width={44} flexDirection="column" gap={1}>
+          <OrcaPanel bgColor="element" variant="card" padding={1} titleRight="ORCA">
+            <box alignItems="center" gap={1}>
+              <OrcaMiniLogo />
+              <text fg={theme.textMuted}>New session</text>
+              <text fg={theme.textMuted}>{stamp()}</text>
+            </box>
+          </OrcaPanel>
+
+          <OrcaPanel title="STATUS" bgColor="panel" variant="card" padding={1}>
+            <box flexDirection="column" gap={1}>
+              <Switch>
+                <Match when={onboarding()}>
+                  <text fg={theme.textMuted} wrapMode="word">
+                    Sign in or connect a provider to unlock more models and persistent account features.
+                  </text>
+                </Match>
+                <Match when={true}>
+                  <text fg={theme.textMuted} wrapMode="word">
+                    Workspace ready. Start a session from the prompt and manage agents with the footer commands.
+                  </text>
+                </Match>
+              </Switch>
+              <OrcaStatusBadge
+                status={connected() ? "success" : "warning"}
+                label={connected() ? "connected" : "free mode"}
+                uppercase={false}
+              />
+              <box flexDirection="row" justifyContent="space-between" alignItems="center">
+                <text fg={theme.textMuted}>MCP</text>
+                <OrcaStatusBadge
+                  status={mcpError() ? "error" : connectedMcpCount() > 0 ? "success" : "idle"}
+                  label={`${connectedMcpCount()}`}
+                  uppercase={false}
+                  size="sm"
+                />
+              </box>
+            </box>
+          </OrcaPanel>
+
+          <OrcaPanel bgColor="panel" variant="card" padding={1} footer="ORCA /home">
+            <box flexDirection="column" gap={0.5}>
+              <OrcaDots rows={5} />
+              <text fg={theme.textMuted}>DIR {dir()}</text>
+              <text fg={theme.primary} attributes={TextAttributes.BOLD}>
+                ORCA local
+              </text>
+            </box>
+          </OrcaPanel>
         </box>
+        <Toast />
       </box>
     </>
   )

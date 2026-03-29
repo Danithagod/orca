@@ -84,7 +84,7 @@ export class SubAgentViewerProvider implements vscode.Disposable {
     // Listen for closePanel from the webview (back button)
     const closeDisposable = panel.webview.onDidReceiveMessage((msg) => {
       if (msg.type === "closePanel") {
-        panel.dispose()
+        this.closePanel(panel)
       }
     })
 
@@ -106,5 +106,10 @@ export class SubAgentViewerProvider implements vscode.Disposable {
     }
     this.panels.clear()
     this.providers.clear()
+  }
+
+  private closePanel(panel: vscode.WebviewPanel): void {
+    panel.dispose()
+    void vscode.commands.executeCommand(`${KiloProvider.viewType}.focus`)
   }
 }

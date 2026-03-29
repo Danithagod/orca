@@ -1091,10 +1091,10 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
 
     try {
       const workspaceDir = this.getWorkspaceDirectory(sessionID)
-      const { data: messagesData } = await this.client.session.messages(
-        { sessionID, directory: workspaceDir },
-        { throwOnError: true },
-      )
+      const [{ data: messagesData }, { data: todoData }] = await Promise.all([
+        this.client.session.messages({ sessionID, directory: workspaceDir }, { throwOnError: true }),
+        this.client.session.todo({ sessionID }, { throwOnError: true }),
+      ])
 
       const messages = messagesData.map((m) => ({
         ...m.info,
@@ -1110,6 +1110,12 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
         type: "messagesLoaded",
         sessionID,
         messages,
+      })
+
+      this.postMessage({
+        type: "todoUpdated",
+        sessionID,
+        items: todoData ?? [],
       })
     } catch (err) {
       this.syncedChildSessions.delete(sessionID)

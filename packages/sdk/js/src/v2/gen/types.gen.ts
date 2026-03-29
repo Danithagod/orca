@@ -1957,7 +1957,7 @@ export type LspStatus = {
   id: string
   name: string
   root: string
-  status: "connected" | "error"
+  status: "connected" | "ready" | "error"
 }
 
 export type FormatterStatus = {

@@ -1,0 +1,53 @@
+# Tauri Desktop App — Config & Branding Issues
+
+> Package: `packages/desktop/`
+> Generated: 2026-03-28
+> Verified: 2026-03-28
+> Scope: Tauri config files (dev/beta/prod), capabilities, entitlements, Cargo.toml, package.json, index.html, AppStream metadata
+
+---
+
+## High
+
+| #   | Issue                                           | File                        | Line(s)  | Details                                                                                                                                                                                                                                                                                                           |
+| --- | ----------------------------------------------- | --------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Beta config uses fork identity & wrong repo** | `tauri.beta.conf.json`      | 3, 4, 30 | `productName` is `"OpenCode Beta"` (should be `"Kilo Beta"`). `identifier` is `"ai.opencode.desktop.beta"` (should align with `ai.kilo.desktop.*`). Updater endpoint points to `github.com/anomalyco/opencode-beta` — upstream fork repo. Beta users receive updates from wrong repo (or no updates if archived). |
+| 2   | **Deep link scheme still `opencode`**           | `tauri.conf.json`           | 58       | `"schemes": ["opencode"]` — should be `["kilo"]`. Affects desktop integration and user expectations.                                                                                                                                                                                                              |
+| 3   | **npm package still uses `@opencode-ai` scope** | `package.json`              | 2        | `"name": "@opencode-ai/desktop"`. Workspace deps reference `@opencode-ai/app` and `@opencode-ai/ui`. Leftover from fork.                                                                                                                                                                                          |
+| 4   | **Capabilities on all windows**                 | `capabilities/default.json` | 5        | `"windows": ["*"]` — should restrict to `["main"]`. See security-issues.md #9.                                                                                                                                                                                                                                    |
+| 5   | **`shell:default` permission granted**          | `capabilities/default.json` | 38       | Unnecessary if shell commands only invoked from Rust. See security-issues.md #10.                                                                                                                                                                                                                                 |
+
+## Medium
+
+| #   | Issue                                        | File                                                 | Line(s) | Details                                                                                                                                                                                                                                                                                                                 |
+| --- | -------------------------------------------- | ---------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6   | **AppStream metadata ID mismatch**           | `release/appstream.metainfo.xml`                     | 3, 21   | `<id>ai.kilo.kilo</id>` — redundant `kilo.kilo`. `<launchable>ai.kilo.kilo.desktop</launchable>` doesn't match Tauri identifier `ai.kilo.desktop`. `tauri.prod.conf.json:22` maps to `/usr/share/metainfo/ai.kilo.kilo.metainfo.xml`. Developer listed as `ly.anoma` / "Anomaly Innovations Inc." — should be Kilo-Org. |
+| 7   | **HTML title still "OpenCode"**              | `index.html`                                         | 6       | `<title>OpenCode</title>` should be `<title>Kilo</title>`.                                                                                                                                                                                                                                                              |
+| 8   | **CLI binary name "opencode" in Rust**       | `src-tauri/src/cli.rs`                               | 44      | `const CLI_BINARY_NAME: &str = "opencode"`. Install script creates `opencode-install.sh`. Default username is `"opencode"`.                                                                                                                                                                                             |
+| 9   | **Log filter references `opencode_lib`**     | `src-tauri/src/logging.rs`                           | 30-32   | `EnvFilter::new("opencode_lib=debug,opencode_desktop=debug,sidecar=debug")`. Library crate is named `kilo_lib`.                                                                                                                                                                                                         |
+| 10  | **Log filename still `opencode-desktop`**    | `src-tauri/src/logging.rs`                           | 18      | `format!("opencode-desktop_{timestamp}.log")` — should be `kilo-desktop`.                                                                                                                                                                                                                                               |
+| 11  | **`withGlobalTauri: true`**                  | `tauri.conf.json`                                    | 20      | Exposes `window.__TAURI__` in every frame. Combined with null CSP, injected scripts can invoke all capabilities.                                                                                                                                                                                                        |
+| 12  | **`macOSPrivateApi: true`**                  | `tauri.conf.json`                                    | 24      | Blocks App Store distribution. Document if intentional.                                                                                                                                                                                                                                                                 |
+| 13  | **Unaudited git commits as deps**            | `src-tauri/Cargo.toml`                               | 70-75   | `specta`, `tauri-specta`, `tauri` patched to specific git revisions. See security-issues.md #13.                                                                                                                                                                                                                        |
+| 14  | **Beta/prod share same updater signing key** | `tauri.beta.conf.json:29`, `tauri.prod.conf.json:34` | —       | Beta build could be signed as production.                                                                                                                                                                                                                                                                               |
+| 15  | **Pinned git commits as dependency patches** | `src-tauri/Cargo.toml`                               | 70-75   | ~~Duplicate of Issue 13 — same lines, same `[patch.crates-io]` section.~~ Supply chain risk — branches could be force-pushed.                                                                                                                                                                                           |
+
+## Low
+
+| #   | Issue                                      | File                   | Line(s)   | Details                                                                                                                                                                            |
+| --- | ------------------------------------------ | ---------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 16  | **Unnecessary web meta tags**              | `index.html`           | 11, 14-15 | `<link rel="manifest">`, `<meta property="og:image">`, `<meta property="twitter:image">` serve no purpose in desktop Tauri shell.                                                  |
+| 17  | **`@actions/artifact` in devDependencies** | `package.json`         | 37        | GitHub Actions library in desktop package. Should be in CI scripts, not devDeps.                                                                                                   |
+| 18  | **Pre-release `specta` ecosystem**         | `src-tauri/Cargo.toml` | 46-48     | `specta = "=2.0.0-rc.22"`, `tauri-specta = "=2.0.0-rc.21"`. Track for stable release. Note: `specta-typescript = "0.0.9"` (line 47) is not a pre-release but a very early version. |
+| 19  | **RPM compression set to `none`**          | All tauri configs      | —         | Larger installer packages.                                                                                                                                                         |
+| 20  | **`unsafe set_var` in build.rs**           | `src-tauri/build.rs`   | 3         | Pragmatic workaround but needs explanatory comment.                                                                                                                                |
+| 21  | **`webkit2gtk` pinned to exact version**   | `src-tauri/Cargo.toml` | 63        | `webkit2gtk = "=2.0.2"` — exact pinning prevents security updates. Version 2.0.2 is not a pre-release (no `-rc`/`-beta` suffix).                                                   |
+
+## Summary
+
+| Severity  | Count  |
+| --------- | ------ |
+| High      | 5      |
+| Medium    | 10     |
+| Low       | 6      |
+| **Total** | **21** |

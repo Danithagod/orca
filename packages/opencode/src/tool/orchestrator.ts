@@ -8,10 +8,9 @@ import { MessageV2 } from "../session/message-v2"
 import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
-import { PermissionNext } from "@/permission/next"
 import { Config } from "../config/config"
-import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
+import { compactSubagentText, formatSubagentOutput } from "./subagent-output"
 
 const AGENT_SPAWN_DESCRIPTION = `Spawn a specialized agent to handle a task.
 
@@ -48,6 +47,14 @@ interface AgentSpawnMetadata {
   type: AgentType
   status: AgentStatus | "completed"
   taskId?: string
+  sessionId?: string
+  subagentType?: string
+  summary?: string
+  truncated?: boolean
+  model?: {
+    modelID: string
+    providerID: string
+  }
 }
 
 interface TaskMetadata {
@@ -62,6 +69,14 @@ interface DelegateMetadata {
   taskId: string
   agentId: string
   status: TaskStatus | "completed" | ""
+  sessionId?: string
+  subagentType?: string
+  summary?: string
+  truncated?: boolean
+  model?: {
+    modelID: string
+    providerID: string
+  }
 }
 
 interface AgentStatusMetadata {
@@ -78,7 +93,7 @@ export const AgentSpawnTool = Tool.define("agent_spawn", {
     type: AgentType.describe("Type of agent to spawn"),
     assignTask: z.string().optional().describe("Task description to immediately assign"),
   }),
-  async execute(params, ctx) {
+  async execute(params, ctx): Promise<{ title: string; output: string; metadata: AgentSpawnMetadata }> {
     await ensureOrchestratorInit()
 
     await ctx.ask({
@@ -89,8 +104,8 @@ export const AgentSpawnTool = Tool.define("agent_spawn", {
     })
 
     const agent = await Orchestrator.registerAgent({ type: params.type })
-    const agentDef = await Agent.get("general")
     const subagentType = await Orchestrator.getSubagentType({ agentType: params.type })
+    const agentDef = await Agent.get(subagentType)
 
     if (!params.assignTask) {
       return {
@@ -100,7 +115,7 @@ export const AgentSpawnTool = Tool.define("agent_spawn", {
           agentId: agent.id,
           type: agent.type,
           status: agent.status,
-          taskId: undefined as string | undefined,
+          taskId: undefined,
         },
       }
     }
@@ -112,45 +127,30 @@ export const AgentSpawnTool = Tool.define("agent_spawn", {
       input: {},
     })
 
-    if (!agentDef) throw new Error(`Agent 'general' not found for subagent execution`)
+    if (!agentDef) throw new Error(`Agent '${subagentType}' not found for subagent execution`)
 
     const config = await Config.get()
     const hasTaskPermission = agentDef.permission.some((rule) => rule.permission === "task")
 
-    const session = await iife(async () => {
-      const found = await Session.get(ctx.sessionID).catch(() => {})
-      if (found) return found
-
-      return await Session.create({
-        parentID: ctx.sessionID,
-        title: params.assignTask + ` (@${subagentType} subagent)`,
-        permission: [
-          {
-            permission: "todowrite",
-            pattern: "*",
-            action: "deny",
-          },
-          {
-            permission: "todoread",
-            pattern: "*",
-            action: "deny",
-          },
-          ...(hasTaskPermission
-            ? []
-            : [
-                {
-                  permission: "task" as const,
-                  pattern: "*" as const,
-                  action: "deny" as const,
-                },
-              ]),
-          ...(config.experimental?.primary_tools?.map((t) => ({
-            pattern: "*",
-            action: "allow" as const,
-            permission: t,
-          })) ?? []),
-        ],
-      })
+    const session = await Session.create({
+      parentID: ctx.sessionID,
+      title: params.assignTask + ` (@${subagentType} subagent)`,
+      permission: [
+        ...(hasTaskPermission
+          ? []
+          : [
+              {
+                permission: "task" as const,
+                pattern: "*" as const,
+                action: "deny" as const,
+              },
+            ]),
+        ...(config.experimental?.primary_tools?.map((t) => ({
+          pattern: "*",
+          action: "allow" as const,
+          permission: t,
+        })) ?? []),
+      ],
     })
 
     const parentMsg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
@@ -185,11 +185,10 @@ export const AgentSpawnTool = Tool.define("agent_spawn", {
     const result = await SessionPrompt.prompt({
       messageID,
       sessionID: session.id,
+      internal: true,
       model,
       agent: subagentType,
       tools: {
-        todowrite: false,
-        todoread: false,
         ...(hasTaskPermission ? {} : { task: false }),
         ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
       },
@@ -197,35 +196,44 @@ export const AgentSpawnTool = Tool.define("agent_spawn", {
         {
           type: "text",
           text: params.assignTask!,
+          synthetic: true,
         },
       ],
     })
 
     const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+    const summary = compactSubagentText(text)
 
     await Orchestrator.completeTask({
       taskId: task.id,
-      result: { text, parts: result.parts.map((p) => p.type) },
+      result: { text: summary, parts: result.parts.map((p) => p.type), sessionId: session.id },
     })
 
     agent.status = "idle"
     agent.currentTask = undefined
     agent.tasksCompleted++
 
-    const output = [
-      `Agent: ${agent.type} (${agent.id})`,
-      `Task: ${params.assignTask}`,
-      `Status: completed`,
-      "",
-      "<result>",
-      text,
-      "</result>",
-    ].join("\n")
+    const output = formatSubagentOutput({
+      taskId: task.id,
+      sessionId: session.id,
+      agent: `${agent.type} (${agent.id})`,
+      summary,
+    })
 
     return {
       title: `Completed: ${params.assignTask}`,
       output,
-      metadata: { agentId: agent.id, type: agent.type, taskId: task.id, status: agent.status },
+      metadata: {
+        agentId: agent.id,
+        type: agent.type,
+        status: "completed",
+        taskId: task.id,
+        sessionId: session.id,
+        subagentType,
+        summary,
+        truncated: false,
+        model,
+      },
     }
   },
 })
@@ -359,7 +367,7 @@ export const DelegateTool = Tool.define("delegate", {
     agentId: z.string().optional().describe("Specific agent ID, or omit for auto-routing"),
     prompt: z.string().optional().describe("Prompt to execute for this task"),
   }),
-  async execute(params, ctx) {
+  async execute(params, ctx): Promise<{ title: string; output: string; metadata: DelegateMetadata }> {
     await ensureOrchestratorInit()
 
     await ctx.ask({
@@ -397,40 +405,25 @@ export const DelegateTool = Tool.define("delegate", {
     const config = await Config.get()
     const hasTaskPermission = agentDef.permission.some((rule) => rule.permission === "task")
 
-    const session = await iife(async () => {
-      const found = await Session.get(ctx.sessionID).catch(() => {})
-      if (found) return found
-
-      return await Session.create({
-        parentID: ctx.sessionID,
-        title: task.title + ` (@${subagentType} subagent)`,
-        permission: [
-          {
-            permission: "todowrite",
-            pattern: "*",
-            action: "deny",
-          },
-          {
-            permission: "todoread",
-            pattern: "*",
-            action: "deny",
-          },
-          ...(hasTaskPermission
-            ? []
-            : [
-                {
-                  permission: "task" as const,
-                  pattern: "*" as const,
-                  action: "deny" as const,
-                },
-              ]),
-          ...(config.experimental?.primary_tools?.map((t) => ({
-            pattern: "*",
-            action: "allow" as const,
-            permission: t,
-          })) ?? []),
-        ],
-      })
+    const session = await Session.create({
+      parentID: ctx.sessionID,
+      title: task.title + ` (@${subagentType} subagent)`,
+      permission: [
+        ...(hasTaskPermission
+          ? []
+          : [
+              {
+                permission: "task" as const,
+                pattern: "*" as const,
+                action: "deny" as const,
+              },
+            ]),
+        ...(config.experimental?.primary_tools?.map((t) => ({
+          pattern: "*",
+          action: "allow" as const,
+          permission: t,
+        })) ?? []),
+      ],
     })
 
     const parentMsg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
@@ -466,11 +459,10 @@ export const DelegateTool = Tool.define("delegate", {
     const result = await SessionPrompt.prompt({
       messageID,
       sessionID: session.id,
+      internal: true,
       model,
       agent: subagentType,
       tools: {
-        todowrite: false,
-        todoread: false,
         ...(hasTaskPermission ? {} : { task: false }),
         ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
       },
@@ -478,26 +470,25 @@ export const DelegateTool = Tool.define("delegate", {
         {
           type: "text",
           text: prompt,
+          synthetic: true,
         },
       ],
     })
 
     const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+    const summary = compactSubagentText(text)
 
     await Orchestrator.completeTask({
       taskId: params.taskId,
-      result: { text, parts: result.parts.map((p) => p.type) },
+      result: { text: summary, parts: result.parts.map((p) => p.type), sessionId: session.id },
     })
 
-    const output = [
-      `Task: ${task.title}`,
-      `Agent: ${agent.type} (${agent.id})`,
-      `Status: completed`,
-      "",
-      "<result>",
-      text,
-      "</result>",
-    ].join("\n")
+    const output = formatSubagentOutput({
+      taskId: params.taskId,
+      sessionId: session.id,
+      agent: `${agent.type} (${agent.id})`,
+      summary,
+    })
 
     return {
       title: `Delegated: ${task.title}`,
@@ -507,6 +498,11 @@ export const DelegateTool = Tool.define("delegate", {
         taskId: params.taskId,
         agentId: agent.id,
         status: "completed",
+        sessionId: session.id,
+        subagentType,
+        summary,
+        truncated: false,
+        model,
       },
     }
   },

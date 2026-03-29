@@ -352,6 +352,7 @@ export namespace MessageV2 {
     time: z.object({
       created: z.number(),
     }),
+    internal: z.boolean().optional(),
     format: Format.optional(),
     summary: z
       .object({

@@ -11,6 +11,7 @@ import { spawn } from "child_process"
 import { Instance } from "../project/instance"
 import { Flag } from "@/flag/flag"
 import { TsClient } from "../kilocode/ts-client" // kilocode_change
+import { Glob } from "../util/glob"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -154,25 +155,97 @@ export namespace LSP {
       id: z.string(),
       name: z.string(),
       root: z.string(),
-      status: z.union([z.literal("connected"), z.literal("error")]),
+      status: z.union([z.literal("connected"), z.literal("ready"), z.literal("error")]),
     })
     .meta({
       ref: "LSPStatus",
     })
   export type Status = z.infer<typeof Status>
 
-  export async function status() {
-    return state().then((x) => {
-      const result: Status[] = []
-      for (const client of x.clients) {
-        result.push({
-          id: client.serverID,
-          name: x.servers[client.serverID].id,
-          root: path.relative(Instance.directory, client.root),
-          status: "connected",
-        })
-      }
-      return result
+  const STATUS_IGNORE = [
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/.turbo/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.next/**",
+    "**/coverage/**",
+    "**/.venv/**",
+    "**/venv/**",
+  ]
+
+  function relativeRoot(base: string, root: string) {
+    const rel = path.relative(base, root)
+    return rel || "."
+  }
+
+  async function detectRoot(input: { directory: string; server: LSPServer.Info; fileCache: Map<string, Promise<string | undefined>> }) {
+    const cached = async (ext: string) => {
+      const existing = input.fileCache.get(ext)
+      if (existing) return existing
+
+      const pattern = ext.startsWith(".") ? `**/*${ext}` : `**/${ext}`
+      const task = Glob.scan(pattern, {
+        cwd: input.directory,
+        absolute: true,
+        include: "file",
+        dot: true,
+        ignore: STATUS_IGNORE,
+      }).then((matches) => matches[0])
+
+      input.fileCache.set(ext, task)
+      return task
+    }
+
+    for (const ext of input.server.extensions) {
+      const file = await cached(ext)
+      if (!file) continue
+      const root = await input.server.root(file)
+      if (root) return root
+    }
+
+    return undefined
+  }
+
+  export async function status(input?: { directory?: string; workspace?: string }) {
+    const s = await state()
+    const directory = path.resolve(input?.directory ?? input?.workspace ?? Instance.directory)
+    const result: Status[] = []
+    const connected = new Set<string>()
+    const fileCache = new Map<string, Promise<string | undefined>>()
+
+    for (const client of s.clients) {
+      const server = s.servers[client.serverID]
+      if (!server) continue
+      connected.add(client.root + client.serverID)
+      result.push({
+        id: client.serverID,
+        name: server.id,
+        root: relativeRoot(directory, client.root),
+        status: "connected",
+      })
+    }
+
+    for (const server of Object.values(s.servers)) {
+      const root = await detectRoot({ directory, server, fileCache })
+      if (!root) continue
+
+      const key = root + server.id
+      if (connected.has(key)) continue
+
+      result.push({
+        id: server.id,
+        name: server.id,
+        root: relativeRoot(directory, root),
+        status: s.broken.has(key) ? "error" : "ready",
+      })
+    }
+
+    return result.toSorted((a, b) => {
+      const weight = { connected: 0, ready: 1, error: 2 }
+      const diff = weight[a.status] - weight[b.status]
+      if (diff !== 0) return diff
+      return a.id.localeCompare(b.id)
     })
   }
 

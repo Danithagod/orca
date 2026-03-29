@@ -57,7 +57,9 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const idle = { type: "idle" as const }
   const status = createMemo(() => sync.data.session_status[params.id ?? ""] ?? idle)
   const messages = createMemo(() => (params.id ? (sync.data.message[params.id] ?? []) : []))
-  const userMessages = createMemo(() => messages().filter((m) => m.role === "user") as UserMessage[])
+  const userMessages = createMemo(
+    () => messages().filter((m) => m.role === "user" && !(m as { internal?: boolean }).internal) as UserMessage[],
+  )
   const visibleUserMessages = createMemo(() => {
     const revert = info()?.revert?.messageID
     if (!revert) return userMessages()

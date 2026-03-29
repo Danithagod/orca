@@ -101,14 +101,33 @@ function getState(): OrchestratorState {
 
 export namespace Orchestrator {
   export const init = fn(
-    z.object({ projectPath: z.string(), config: z.record(z.string(), z.unknown()).optional() }),
+    z.object({
+      projectPath: z.string(),
+      config: z.record(z.string(), z.unknown()).optional(),
+      reset: z.boolean().optional(),
+    }),
     async (input) => {
+      if (state && state.projectPath === input.projectPath && !input.reset) {
+        return {
+          initialized: true,
+          projectPath: input.projectPath,
+          preserved: true,
+          agents: state.agents.size,
+          tasks: state.tasks.size,
+        }
+      }
       state = {
         agents: new Map(),
         tasks: new Map(),
         projectPath: input.projectPath,
       }
-      return { initialized: true, projectPath: input.projectPath }
+      return {
+        initialized: true,
+        projectPath: input.projectPath,
+        preserved: false,
+        agents: 0,
+        tasks: 0,
+      }
     },
   )
 

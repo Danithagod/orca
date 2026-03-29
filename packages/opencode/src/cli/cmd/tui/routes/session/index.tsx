@@ -6,6 +6,7 @@ import {
   createSignal,
   For,
   Match,
+  onCleanup,
   on,
   onMount,
   Show,
@@ -17,7 +18,6 @@ import path from "path"
 import { useRoute, useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { SplitBorder } from "@tui/component/border"
-import { Spinner } from "@tui/component/spinner"
 import { selectedForeground, useTheme } from "@tui/context/theme"
 import {
   BoxRenderable,
@@ -44,6 +44,7 @@ import type { EditTool } from "@/tool/edit"
 import type { ApplyPatchTool } from "@/tool/apply_patch"
 import type { WebFetchTool } from "@/tool/webfetch"
 import type { TaskTool } from "@/tool/task"
+import { AgentSpawnTool, DelegateTool } from "@/tool/orchestrator"
 import type { QuestionTool } from "@/tool/question"
 import type { SkillTool } from "@/tool/skill"
 import { useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
@@ -83,11 +84,14 @@ import { formatTranscript } from "../../util/transcript"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 
-import { OrcaPanel } from "../../component/orca-ui" // kilocode_change
+import { OrcaDots, OrcaPanel, OrcaStatusBadge } from "../../component/orca-ui" // kilocode_change
+import { isPausedTool, normalizeTodoStatus } from "../../component/activity-state"
 import { formatMarkdownTables } from "../../util/markdown" // kilocode_change
 import { bell } from "@/kilocode/bell" // kilocode_change
 
 addDefaultParsers(parsers.parsers)
+
+const TOOL_ACTIVE_FRAMES = ["◜", "◠", "◝", "◞", "◡", "◟"]
 
 class CustomSpeedScroll implements ScrollAcceleration {
   constructor(private speed: number) {}
@@ -199,7 +203,7 @@ export function Session() {
   const [bellEnabled, setBellEnabled] = kv.signal("bell_enabled", true)
   const [showGenericToolOutput, setShowGenericToolOutput] = kv.signal("generic_tool_output_visibility", false)
 
-  const wide = createMemo(() => dimensions().width > 120)
+  const wide = createMemo(() => dimensions().width > 128)
   const sidebarVisible = createMemo(() => {
     if (session()?.parentID) return false
     if (sidebarOpen()) return true
@@ -207,7 +211,7 @@ export function Session() {
     return false
   })
   const showTimestamps = createMemo(() => timestamps() === "show")
-  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - 4)
+  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 46 : 0) - 4)
 
   const scrollAcceleration = createMemo(() => {
     const tui = tuiConfig
@@ -296,6 +300,11 @@ export function Session() {
   const [exitPress, setExitPress] = createSignal(0)
   useKeyboard((evt) => {
     if (!session()?.parentID) return
+    if (evt.name === "escape" && dialog.stack.length === 0) {
+      evt.preventDefault()
+      moveParent()
+      return
+    }
     if (keybind.match("app_exit", evt)) {
       if (evt.ctrl && evt.name === "c") {
         evt.preventDefault()
@@ -389,6 +398,15 @@ export function Session() {
         sessionID: sessions[next].id,
       })
     }
+  }
+
+  function moveParent() {
+    const parentID = session()?.parentID
+    if (!parentID) return
+    navigate({
+      type: "session",
+      sessionID: parentID,
+    })
   }
 
   function childSessionHandler(func: (dialog: DialogContext) => void) {
@@ -545,7 +563,9 @@ export function Session() {
         const status = sync.data.session_status?.[route.sessionID]
         if (status?.type !== "idle") await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
         const revert = session()?.revert?.messageID
-        const message = messages().findLast((x) => (!revert || x.id < revert) && x.role === "user")
+        const message = messages().findLast(
+          (x) => (!revert || x.id < revert) && x.role === "user" && !(x as { internal?: boolean }).internal,
+        )
         if (!message) return
         sdk.client.session
           .revert({
@@ -584,7 +604,9 @@ export function Session() {
         dialog.clear()
         const messageID = session()?.revert?.messageID
         if (!messageID) return
-        const message = messages().find((x) => x.role === "user" && x.id > messageID)
+        const message = messages().find(
+          (x) => x.role === "user" && x.id > messageID && !(x as { internal?: boolean }).internal,
+        )
         if (!message) {
           sdk.client.session.unrevert({
             sessionID: route.sessionID,
@@ -975,13 +997,7 @@ export function Session() {
       hidden: true,
       enabled: !!session()?.parentID,
       onSelect: childSessionHandler((dialog) => {
-        const parentID = session()?.parentID
-        if (parentID) {
-          navigate({
-            type: "session",
-            sessionID: parentID,
-          })
-        }
+        moveParent()
         dialog.clear()
       }),
     },
@@ -1043,7 +1059,7 @@ export function Session() {
   const revertRevertedMessages = createMemo(() => {
     const messageID = revertMessageID()
     if (!messageID) return []
-    return messages().filter((x) => x.id >= messageID && x.role === "user")
+    return messages().filter((x) => x.id >= messageID && x.role === "user" && !(x as { internal?: boolean }).internal)
   })
 
   const revert = createMemo(() => {
@@ -1078,12 +1094,12 @@ export function Session() {
         tui: tuiConfig,
       }}
     >
-      <box flexDirection="row">
-        <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={1} gap={1}>
+      <box flexDirection="row" width="100%" height="100%">
+        <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={0} gap={1}>
           <Show when={session()}>
-            <OrcaPanel title={session()?.title} padding={1}>
-              <Show when={showHeader() && (!sidebarVisible() || !wide())}>
-                <Header />
+            <OrcaPanel variant="frame" bgColor="background" padding={1} inset={false}>
+              <Show when={showHeader()}>
+                <Header child={!!session()?.parentID} onBack={moveParent} />
               </Show>
               <scrollbox
                 ref={(r) => (scroll = r)}
@@ -1094,8 +1110,8 @@ export function Session() {
                   paddingLeft: 1,
                   visible: showScrollbar(),
                   trackOptions: {
-                    backgroundColor: theme.backgroundElement,
-                    foregroundColor: theme.border,
+                    backgroundColor: theme.backgroundPanel,
+                    foregroundColor: theme.primary,
                   },
                 }}
                 stickyScroll={true}
@@ -1198,6 +1214,9 @@ export function Session() {
                     </Switch>
                   )}
                 </For>
+                <box marginTop={1} paddingLeft={1} paddingRight={1}>
+                  <OrcaDots rows={4} />
+                </box>
               </scrollbox>
               <box flexShrink={0} marginTop={1}>
                 <Show when={permissions().length > 0}>
@@ -1224,7 +1243,7 @@ export function Session() {
                 />
               </box>
             </OrcaPanel>
-            <Footer />
+            <Footer child={!!session()?.parentID} />
           </Show>
           <Toast />
         </box>
@@ -1288,11 +1307,7 @@ function UserMessage(props: {
     <>
       <Show when={text()}>
         <box marginTop={props.index === 0 ? 0 : 1} marginBottom={1}>
-          <OrcaPanel 
-            borderColor={theme.border}
-            padding={1}
-            bgColor="panel"
-          >
+          <OrcaPanel borderColor={theme.border} padding={1} bgColor="panel" inset={false}>
             <box
               onMouseOver={() => {
                 setHover(true)
@@ -1307,7 +1322,13 @@ function UserMessage(props: {
             >
               <text fg={theme.text}>{text()?.text}</text>
               <Show when={files().length}>
-                <box flexDirection="row" paddingBottom={metadataVisible() ? 1 : 0} paddingTop={1} gap={1} flexWrap="wrap">
+                <box
+                  flexDirection="row"
+                  paddingBottom={metadataVisible() ? 1 : 0}
+                  paddingTop={1}
+                  gap={1}
+                  flexWrap="wrap"
+                >
                   <For each={files()}>
                     {(file) => {
                       const bg = createMemo(() => {
@@ -1503,12 +1524,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   return (
     <Show when={props.part.text.trim()}>
       <box id={"text-" + props.part.id} marginTop={1} flexShrink={0}>
-        <box
-          border={["left"]}
-          borderColor={local.agent.color(props.message.agent)}
-          customBorderChars={SplitBorder.customBorderChars}
-          paddingLeft={2}
-        >
+        <OrcaPanel bgColor="element" variant="card" padding={1} borderColor={local.agent.color(props.message.agent)}>
           <Switch>
             <Match when={Flag.KILO_EXPERIMENTAL_MARKDOWN}>
               <markdown
@@ -1530,7 +1546,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
               />
             </Match>
           </Switch>
-        </box>
+        </OrcaPanel>
       </box>
     </Show>
   )
@@ -1606,7 +1622,13 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
           <Edit {...toolprops} />
         </Match>
         <Match when={props.part.tool === "task"}>
-          <Task {...toolprops} />
+          <Subagent {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "agent_spawn"}>
+          <Subagent {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "delegate"}>
+          <Subagent {...toolprops} />
         </Match>
         <Match when={props.part.tool === "apply_patch"}>
           <ApplyPatch {...toolprops} />
@@ -1685,6 +1707,124 @@ function ToolTitle(props: { fallback: string; when: any; icon: string; children:
   )
 }
 
+function toolStateBadge(part: ToolPart, permission: boolean) {
+  if (permission) {
+    return {
+      label: "APPROVAL",
+      status: "warning" as const,
+    }
+  }
+  switch (part.state.status) {
+    case "running":
+      return {
+        label: "RUNNING",
+        status: "active" as const,
+      }
+    case "error":
+      return {
+        label: isPausedTool(part) ? "PAUSED" : "INTERRUPTED",
+        status: isPausedTool(part) ? ("paused" as const) : ("error" as const),
+      }
+    case "completed":
+      return {
+        label: "DONE",
+        status: "muted" as const,
+      }
+    default:
+      return {
+        label: "PENDING",
+        status: "warning" as const,
+      }
+  }
+}
+
+function ActiveToolBadge(props: { label: string; size?: "xs" | "sm" | "md" | "lg" }) {
+  const { theme } = useTheme()
+
+  const pad = () => {
+    switch (props.size) {
+      case "xs":
+        return { left: 1, right: 1 }
+      case "sm":
+        return { left: 1, right: 1 }
+      case "lg":
+        return { left: 2, right: 2 }
+      default:
+        return { left: 1, right: 1 }
+    }
+  }
+
+  return (
+    <box
+      flexDirection="row"
+      alignItems="center"
+      backgroundColor={props.size === "xs" ? undefined : theme.backgroundElement}
+      paddingLeft={pad().left}
+      paddingRight={pad().right}
+      border={props.size === "xs" ? ["left", "right"] : ["top", "bottom", "left", "right"]}
+      borderColor={theme.borderActive}
+      gap={1}
+      flexShrink={0}
+    >
+      <ToolActiveSpinner color={theme.primary} />
+      <text
+        fg={theme.primary}
+        bg={props.size === "xs" ? undefined : theme.backgroundElement}
+        attributes={TextAttributes.BOLD}
+        wrapMode="none"
+      >
+        {props.label}
+      </text>
+    </box>
+  )
+}
+
+function ToolActiveSpinner(props: { color?: RGBA }) {
+  const { theme } = useTheme()
+  const kv = useKV()
+  const color = createMemo(() => props.color ?? theme.textMuted)
+  const [idx, setIdx] = createSignal(0)
+  const animate = createMemo(() => kv.get("animations_enabled", true))
+
+  createEffect(() => {
+    if (!animate()) return
+    const timer = setInterval(() => {
+      setIdx((prev) => (prev + 1) % TOOL_ACTIVE_FRAMES.length)
+    }, 90)
+    onCleanup(() => clearInterval(timer))
+  })
+
+  return (
+    <Show when={kv.get("animations_enabled", true)} fallback={<text fg={color()}>•</text>}>
+      <text fg={color()} wrapMode="none">
+        {TOOL_ACTIVE_FRAMES[idx()]}
+      </text>
+    </Show>
+  )
+}
+
+function ToolBadge(props: { status: "idle" | "active" | "paused" | "error" | "success" | "warning" | "muted"; label: string; size?: "xs" | "sm" | "md" | "lg" }) {
+  return (
+    <Show when={props.status === "active"} fallback={<OrcaStatusBadge status={props.status} label={props.label} size={props.size} />}>
+      <ActiveToolBadge label={props.label} size={props.size} />
+    </Show>
+  )
+}
+
+function ToolSpinner(props: { color?: RGBA; children?: JSX.Element }) {
+  const { theme } = useTheme()
+  const color = createMemo(() => props.color ?? theme.textMuted)
+
+  return (
+    <box flexDirection="row" alignItems="center" gap={1}>
+      <ToolActiveSpinner color={color()} />
+      <Show when={props.children}>
+        <text fg={color()}>{props.children}</text>
+      </Show>
+    </box>
+  )
+}
+
 function InlineTool(props: {
   icon: string
   iconColor?: RGBA
@@ -1714,6 +1854,7 @@ function InlineTool(props: {
     if (props.complete) return theme.textMuted
     return theme.text
   })
+  const badge = createMemo(() => toolStateBadge(props.part, permission()))
 
   const error = createMemo(() => (props.part.state.status === "error" ? props.part.state.error : undefined))
 
@@ -1727,7 +1868,6 @@ function InlineTool(props: {
   return (
     <box
       marginTop={margin()}
-      paddingLeft={3}
       onMouseOver={() => props.onClick && setHover(true)}
       onMouseOut={() => setHover(false)}
       onMouseUp={() => {
@@ -1757,21 +1897,46 @@ function InlineTool(props: {
         }
       }}
     >
-      <Switch>
-        <Match when={props.spinner}>
-          <Spinner color={fg()} children={props.children} />
-        </Match>
-        <Match when={true}>
-          <text paddingLeft={3} fg={fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
-            <Show fallback={<>~ {props.pending}</>} when={props.complete}>
-              <span style={{ fg: props.iconColor }}>{props.icon}</span> {props.children}
+      <OrcaPanel
+        bgColor={hover() ? "element" : "panel"}
+        variant="card"
+        padding={0}
+        borderColor={error() ? theme.error : theme.border}
+      >
+        <box
+          flexDirection="row"
+          justifyContent="space-between"
+          alignItems="center"
+          gap={0.5}
+          width="100%"
+          paddingLeft={1}
+          paddingRight={1}
+        >
+          <box flexDirection="row" alignItems="center" gap={1} minWidth={1} flexShrink={1}>
+            <Show
+              when={props.spinner}
+              fallback={
+                <text fg={props.iconColor ?? fg()} attributes={TextAttributes.BOLD}>
+                  {props.icon}
+                </text>
+              }
+            >
+              <ToolSpinner color={fg()} />
             </Show>
-          </text>
-        </Match>
-      </Switch>
-      <Show when={error() && !denied()}>
-        <text fg={theme.error}>{error()}</text>
-      </Show>
+            <text fg={fg()} wrapMode="word" attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
+              <Show fallback={<>~ {props.pending}</>} when={props.complete}>
+                {props.children}
+              </Show>
+            </text>
+          </box>
+          <ToolBadge status={badge().status} label={badge().label} size="xs" />
+        </box>
+        <Show when={error() && !denied()}>
+          <box paddingLeft={1} paddingRight={1}>
+            <text fg={theme.error}>{error()}</text>
+          </box>
+        </Show>
+      </OrcaPanel>
     </box>
   )
 }
@@ -1787,17 +1952,10 @@ function BlockTool(props: {
   const renderer = useRenderer()
   const [hover, setHover] = createSignal(false)
   const error = createMemo(() => (props.part?.state.status === "error" ? props.part.state.error : undefined))
+  const badge = createMemo(() => toolStateBadge(props.part!, false))
   return (
     <box
-      border={["left"]}
-      paddingTop={1}
-      paddingBottom={1}
-      paddingLeft={2}
       marginTop={1}
-      gap={1}
-      backgroundColor={hover() ? theme.backgroundMenu : theme.backgroundPanel}
-      customBorderChars={SplitBorder.customBorderChars}
-      borderColor={theme.background}
       onMouseOver={() => props.onClick && setHover(true)}
       onMouseOut={() => setHover(false)}
       onMouseUp={() => {
@@ -1805,20 +1963,30 @@ function BlockTool(props: {
         props.onClick?.()
       }}
     >
-      <Show
-        when={props.spinner}
-        fallback={
-          <text paddingLeft={3} fg={theme.textMuted}>
-            {props.title}
-          </text>
-        }
+      <OrcaPanel
+        bgColor={hover() ? "element" : "panel"}
+        variant="card"
+        padding={1}
+        borderColor={error() ? theme.error : theme.border}
       >
-        <Spinner color={theme.textMuted}>{props.title.replace(/^# /, "")}</Spinner>
-      </Show>
-      {props.children}
-      <Show when={error()}>
-        <text fg={theme.error}>{error()}</text>
-      </Show>
+        <box flexDirection="row" justifyContent="space-between" alignItems="center" gap={1}>
+          <Show
+            when={props.spinner}
+            fallback={
+              <text fg={theme.textMuted} wrapMode="word" minWidth={1} flexShrink={1}>
+                {props.title.replace(/^# /, "")}
+              </text>
+            }
+          >
+            <ToolSpinner color={theme.textMuted}>{props.title.replace(/^# /, "")}</ToolSpinner>
+          </Show>
+          <ToolBadge status={badge().status} label={badge().label} size="sm" />
+        </box>
+        {props.children}
+        <Show when={error()}>
+          <text fg={theme.error}>{error()}</text>
+        </Show>
+      </OrcaPanel>
     </box>
   )
 }
@@ -2020,12 +2188,37 @@ function WebSearch(props: ToolProps<any>) {
   )
 }
 
-function Task(props: ToolProps<typeof TaskTool>) {
-  const { theme } = useTheme()
-  const keybind = useKeybind()
+function formatTokens(count: number) {
+  if (count >= 10000) return `${Math.round(count / 1000)}k`
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}k`
+  return count.toString()
+}
+
+function Subagent(props: ToolProps<typeof TaskTool> | ToolProps<typeof AgentSpawnTool> | ToolProps<typeof DelegateTool>) {
   const { navigate } = useRoute()
-  const local = useLocal()
   const sync = useSync()
+  const info = createMemo(() => {
+    const input = props.input as Record<string, any>
+    const metadata = props.metadata as Record<string, any>
+    if (props.tool === "agent_spawn") {
+      const agent = typeof input.type === "string" ? Locale.titlecase(input.type) : "Agent"
+      const title =
+        typeof metadata.title === "string"
+          ? metadata.title
+          : typeof input.assignTask === "string"
+            ? input.assignTask
+            : `Spawn ${agent}`
+      return { title }
+    }
+    if (props.tool === "delegate") {
+      const title =
+        typeof metadata.title === "string" ? metadata.title : typeof input.prompt === "string" ? input.prompt : "Delegated task"
+      return { title }
+    }
+    const agent = typeof input.subagent_type === "string" ? Locale.titlecase(input.subagent_type) : "Agent"
+    const title = typeof input.description === "string" ? input.description : `${agent} task`
+    return { title }
+  })
 
   onMount(() => {
     if (props.metadata.sessionId && !sync.data.message[props.metadata.sessionId]?.length)
@@ -2043,8 +2236,23 @@ function Task(props: ToolProps<typeof TaskTool>) {
   })
 
   const current = createMemo(() => tools().findLast((x) => (x.state as any).title))
+  const todo = createMemo(() => sync.data.todo[props.metadata.sessionId ?? ""] ?? [])
 
   const isRunning = createMemo(() => props.part.state.status === "running")
+  const tokens = createMemo(() =>
+    messages().reduce((sum, msg) => {
+      if (msg.role !== "assistant" || !msg.tokens) return sum
+      return (
+        sum +
+        (msg.tokens.total ??
+          msg.tokens.input +
+            msg.tokens.output +
+            msg.tokens.reasoning +
+            (msg.tokens.cache?.read ?? 0) +
+            (msg.tokens.cache?.write ?? 0))
+      )
+    }, 0),
+  )
 
   const duration = createMemo(() => {
     const first = messages().find((x) => x.role === "user")?.time.created
@@ -2054,17 +2262,22 @@ function Task(props: ToolProps<typeof TaskTool>) {
   })
 
   const content = createMemo(() => {
-    if (!props.input.description) return ""
-    let content = [`Task ${props.input.description}`]
+    const content = [info().title]
 
     if (isRunning() && tools().length > 0) {
-      // content[0] += ` · ${tools().length} toolcalls`
       if (current()) content.push(`↳ ${Locale.titlecase(current()!.tool)} ${(current()!.state as any).title}`)
       else content.push(`↳ ${tools().length} toolcalls`)
+    } else if (isRunning() && todo().length > 0) {
+      content.push(`↳ ${todo().length} todos`)
     }
 
     if (props.part.state.status === "completed") {
-      content.push(`└ ${tools().length} toolcalls · ${Locale.duration(duration())}`)
+      const summary = []
+      if (tools().length > 0) summary.push(`${tools().length} toolcalls`)
+      if (todo().length > 0) summary.push(`${todo().length} todos`)
+      if (tokens() > 0) summary.push(`${formatTokens(tokens())} tok`)
+      if (duration() > 0) summary.push(Locale.duration(duration()))
+      if (summary.length > 0) content.push(`└ ${summary.join(" · ")}`)
     }
 
     return content.join("\n")
@@ -2074,7 +2287,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
     <InlineTool
       icon="│"
       spinner={isRunning()}
-      complete={props.input.description}
+      complete={info().title}
       pending="Delegating..."
       part={props.part}
       onClick={() => {
@@ -2216,13 +2429,20 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
 }
 
 function TodoWrite(props: ToolProps<typeof TodoWriteTool>) {
+  const ctx = use()
+  const sync = useSync()
+  const active = createMemo(() => {
+    const status = sync.session.status(ctx.sessionID)
+    return status === "working" || status === "compacting"
+  })
+
   return (
     <Switch>
       <Match when={props.metadata.todos?.length}>
         <BlockTool title="# Todos" part={props.part}>
           <box>
             <For each={props.input.todos ?? []}>
-              {(todo) => <TodoItem status={todo.status} content={todo.content} />}
+              {(todo) => <TodoItem status={normalizeTodoStatus(todo.status, active())} content={todo.content} />}
             </For>
           </box>
         </BlockTool>
